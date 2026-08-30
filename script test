@@ -1,0 +1,440 @@
+local Lighting = game:GetService("Lighting")
+local SoundService = game:GetService("SoundService")
+local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- ==========================================
+-- ⚙️ CONFIGURACIÓN GENERAL
+-- ==========================================
+local config = {
+    israelMode = true,      -- ON / OFF global
+    rango = 60,
+    angulo = 75,
+    volumenDetected = 5,
+    volumenMusicaBase = 1.5,
+    detectarTeam = false,
+    tamanoEstrella = 70,    -- Tamaño fijo en pantalla (Píxeles)
+    velocidadGiro = 6
+}
+
+local idImagenIsraelSky = "rbxassetid://7940780144"
+local idEstrellaFallback = "rbxassetid://7940780144"
+
+local archivoMusica = "hava.mp3"
+local archivoDetected = "detected.mp3"
+local archivoEstrella = "estrella.png"
+
+-- Cargar archivos locales
+local function cargarAssetLocal(nombreBase)
+    if not isfile then return nil end
+    local posiblesNombres = {
+        nombreBase, nombreBase .. ".png", nombreBase .. ".mp3",
+        nombreBase:gsub("%.png$", ""), nombreBase:gsub("%.mp3$", "")
+    }
+    for _, nombre in ipairs(posiblesNombres) do
+        if isfile(nombre) then
+            if getcustomasset then return getcustomasset(nombre)
+            elseif getsynasset then return getsynasset(nombre) end
+        end
+    end
+    return nil
+end
+
+-- 1. 🌌 MANEJO DEL CIELO Y LUZ
+local skyboxOriginales = {}
+for _, child in pairs(Lighting:GetChildren()) do
+    if child:IsA("Sky") then
+        table.insert(skyboxOriginales, child:Clone())
+    end
+end
+
+local memeSky = Instance.new("Sky")
+memeSky.Name = "MemeSkyD666"
+memeSky.SkyboxBk = idImagenIsraelSky
+memeSky.SkyboxDn = idImagenIsraelSky
+memeSky.SkyboxFt = idImagenIsraelSky
+memeSky.SkyboxLf = idImagenIsraelSky
+memeSky.SkyboxRt = idImagenIsraelSky
+memeSky.SkyboxUp = idImagenIsraelSky
+
+local function aplicarAmbiente(activo)
+    if activo then
+        for _, child in pairs(Lighting:GetChildren()) do
+            if child:IsA("Sky") or child:IsA("Atmosphere") then child:Destroy() end
+        end
+        memeSky.Parent = Lighting
+        Lighting.Ambient = Color3.fromRGB(0, 56, 184)
+        Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+        Lighting.Brightness = 3
+    else
+        memeSky.Parent = nil
+        Lighting.Ambient = Color3.fromRGB(128, 128, 128)
+        Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+        Lighting.Brightness = 2
+        for _, sky in pairs(skyboxOriginales) do
+            sky:Clone().Parent = Lighting
+        end
+    end
+end
+
+-- 2. 🎵 MANEJO DE AUDIO
+local bgAudio = nil
+local customMusica = cargarAssetLocal(archivoMusica)
+
+if customMusica then
+    bgAudio = Instance.new("Sound")
+    bgAudio.Name = "MemeBackgroundAudio"
+    bgAudio.SoundId = customMusica
+    bgAudio.Volume = config.volumenMusicaBase
+    bgAudio.Looped = true
+    bgAudio.Parent = SoundService
+end
+
+local soundDetectedAsset = cargarAssetLocal(archivoDetected)
+local baseSoundDetected = nil
+if soundDetectedAsset then
+    baseSoundDetected = Instance.new("Sound")
+    baseSoundDetected.SoundId = soundDetectedAsset
+    baseSoundDetected.Parent = SoundService
+end
+
+local customEstrellaAsset = cargarAssetLocal(archivoEstrella)
+
+local function sonarDetectedConDuck()
+    if not baseSoundDetected then return end
+    
+    if bgAudio and bgAudio.IsPlaying then
+        bgAudio.Volume = config.volumenMusicaBase * 0.2
+    end
+    
+    local sonidoClon = baseSoundDetected:Clone()
+    sonidoClon.Volume = config.volumenDetected
+    sonidoClon.Parent = SoundService
+    sonidoClon:Play()
+    
+    task.delay(1.5, function()
+        if bgAudio then
+            bgAudio.Volume = config.volumenMusicaBase
+        end
+    end)
+    
+    game:GetService("Debris"):AddItem(sonidoClon, 3)
+end
+
+-- 3. 🖥️ INTERFAZ GRÁFICA "D666"
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "D666_UI"
+ScreenGui.ResetOnSpawn = false
+pcall(function() ScreenGui.Parent = game:GetService("CoreGui") end)
+if not ScreenGui.Parent then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+local Panel = Instance.new("Frame")
+Panel.Name = "MainPanel"
+Panel.Size = UDim2.new(0, 210, 0, 250)
+Panel.Position = UDim2.new(0.05, 0, 0.3, 0)
+Panel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Panel.BorderSizePixel = 0
+Panel.Active = true
+Panel.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = Panel
+
+local Titulo = Instance.new("TextLabel")
+Titulo.Size = UDim2.new(1, 0, 0, 32)
+Titulo.BackgroundColor3 = Color3.fromRGB(0, 56, 184)
+Titulo.Text = " ✡️ D666"
+Titulo.TextColor3 = Color3.fromRGB(255, 255, 255)
+Titulo.Font = Enum.Font.GothamBold
+Titulo.TextSize = 14
+Titulo.TextXAlignment = Enum.TextXAlignment.Left
+Titulo.Parent = Panel
+
+local TituloCorner = Instance.new("UICorner")
+TituloCorner.CornerRadius = UDim.new(0, 8)
+TituloCorner.Parent = Titulo
+
+-- Lógica Drag para el Panel
+local dragging, dragStart, startPos
+Titulo.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = Panel.Position
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        Panel.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+-- 🔘 BOTÓN BOTÓN DE TOGGLE FLOTANTE (ABRIR/CERRAR MENÚ)
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Name = "OpenMenuButton"
+ToggleButton.Size = UDim2.new(0, 45, 0, 45)
+ToggleButton.Position = UDim2.new(0.01, 0, 0.45, 0)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 56, 184)
+ToggleButton.Text = "D"
+ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.Font = Enum.Font.GothamBold
+ToggleButton.TextSize = 20
+ToggleButton.Active = true
+ToggleButton.Parent = ScreenGui
+
+local ToggleCorner = Instance.new("UICorner")
+ToggleCorner.CornerRadius = UDim.new(1, 0) -- Redondo
+ToggleCorner.Parent = ToggleButton
+
+local ToggleStroke = Instance.new("UIStroke")
+ToggleStroke.Color = Color3.fromRGB(255, 255, 255)
+ToggleStroke.Thickness = 2
+ToggleStroke.Parent = ToggleButton
+
+-- Hacer que el botón de Toggle también se pueda arrastrar por la pantalla
+local dragBtn, dragStartBtn, startPosBtn
+ToggleButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragBtn = true
+        dragStartBtn = input.Position
+        startPosBtn = ToggleButton.Position
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if dragBtn and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStartBtn
+        ToggleButton.Position = UDim2.new(startPosBtn.X.Scale, startPosBtn.X.Offset + delta.X, startPosBtn.Y.Scale, startPosBtn.Y.Offset + delta.Y)
+    end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragBtn = false
+    end
+end)
+
+-- Función para alternar visibilidad del Panel
+local function toggleMenu()
+    Panel.Visible = not Panel.Visible
+end
+
+ToggleButton.MouseButton1Click:Connect(toggleMenu)
+
+-- Atajo de teclado: Tecla Ctrl Izquierdo para abrir/cerrar
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.LeftControl then
+        toggleMenu()
+    end
+end)
+
+-- BOTÓN TOGGLE GLOBAL: ISRAEL MODE
+local BtnIsraelMode = Instance.new("TextButton")
+BtnIsraelMode.Size = UDim2.new(0.9, 0, 0, 30)
+BtnIsraelMode.Position = UDim2.new(0.05, 0, 0, 40)
+BtnIsraelMode.BackgroundColor3 = Color3.fromRGB(0, 170, 80)
+BtnIsraelMode.Text = "ISRAEL MODE: ON"
+BtnIsraelMode.TextColor3 = Color3.fromRGB(255, 255, 255)
+BtnIsraelMode.Font = Enum.Font.GothamBold
+BtnIsraelMode.TextSize = 11
+BtnIsraelMode.Parent = Panel
+
+local BtnIsraelCorner = Instance.new("UICorner")
+BtnIsraelCorner.CornerRadius = UDim.new(0, 5)
+BtnIsraelCorner.Parent = BtnIsraelMode
+
+local function crearFila(nombre, yOffset, valorDefecto, alCambiar)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.6, -10, 0, 22)
+    label.Position = UDim2.new(0, 10, 0, yOffset)
+    label.BackgroundTransparency = 1
+    label.Text = nombre
+    label.TextColor3 = Color3.fromRGB(200, 200, 200)
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 11
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = Panel
+
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(0.35, -10, 0, 22)
+    box.Position = UDim2.new(0.6, 5, 0, yOffset)
+    box.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    box.TextColor3 = Color3.fromRGB(255, 255, 255)
+    box.Text = tostring(valorDefecto)
+    box.Font = Enum.Font.GothamBold
+    box.TextSize = 11
+    box.Parent = Panel
+
+    local boxCorner = Instance.new("UICorner")
+    boxCorner.CornerRadius = UDim.new(0, 4)
+    boxCorner.Parent = box
+
+    box.FocusLost:Connect(function()
+        local num = tonumber(box.Text)
+        if num then alCambiar(num) else box.Text = tostring(valorDefecto) end
+    end)
+end
+
+crearFila("Rango:", 80, config.rango, function(val) config.rango = val end)
+crearFila("Ángulo FOV:", 108, config.angulo, function(val) config.angulo = val end)
+crearFila("Vol. Alert:", 136, config.volumenDetected, function(val) config.volumenDetected = val end)
+
+local BtnTeam = Instance.new("TextButton")
+BtnTeam.Size = UDim2.new(0.9, 0, 0, 26)
+BtnTeam.Position = UDim2.new(0.05, 0, 0, 168)
+BtnTeam.BackgroundColor3 = Color3.fromRGB(170, 40, 40)
+BtnTeam.Text = "Detectar Team: NO"
+BtnTeam.TextColor3 = Color3.fromRGB(255, 255, 255)
+BtnTeam.Font = Enum.Font.GothamBold
+BtnTeam.TextSize = 11
+BtnTeam.Parent = Panel
+
+local BtnTeamCorner = Instance.new("UICorner")
+BtnTeamCorner.CornerRadius = UDim.new(0, 4)
+BtnTeamCorner.Parent = BtnTeam
+
+BtnTeam.MouseButton1Click:Connect(function()
+    config.detectarTeam = not config.detectarTeam
+    if config.detectarTeam then
+        BtnTeam.Text = "Detectar Team: SÍ"
+        BtnTeam.BackgroundColor3 = Color3.fromRGB(40, 170, 40)
+    else
+        BtnTeam.Text = "Detectar Team: NO"
+        BtnTeam.BackgroundColor3 = Color3.fromRGB(170, 40, 40)
+    end
+end)
+
+-- 4. 📐 RASTREO Y LÓGICA
+local jugadoresDetectados = {}
+local marcasVisuales = {}
+
+local function removerMarcador(jugador)
+    if marcasVisuales[jugador] then
+        marcasVisuales[jugador]:Destroy()
+        marcasVisuales[jugador] = nil
+    end
+    jugadoresDetectados[jugador] = nil
+end
+
+local function limpiarTodo()
+    for jugador in pairs(marcasVisuales) do
+        removerMarcador(jugador)
+    end
+end
+
+BtnIsraelMode.MouseButton1Click:Connect(function()
+    config.israelMode = not config.israelMode
+    if config.israelMode then
+        BtnIsraelMode.Text = "ISRAEL MODE: ON"
+        BtnIsraelMode.BackgroundColor3 = Color3.fromRGB(0, 170, 80)
+        aplicarAmbiente(true)
+        if bgAudio then bgAudio:Play() end
+    else
+        BtnIsraelMode.Text = "ISRAEL MODE: OFF"
+        BtnIsraelMode.BackgroundColor3 = Color3.fromRGB(170, 40, 40)
+        aplicarAmbiente(false)
+        if bgAudio then bgAudio:Stop() end
+        limpiarTodo()
+    end
+end)
+
+local function estaEnCampoDeVision(posicionObjetivo)
+    local camaraCF = Camera.CFrame
+    local direccionAObjetivo = (posicionObjetivo - camaraCF.Position).Unit
+    local vectorMirada = camaraCF.LookVector
+    local productoPunto = vectorMirada:Dot(direccionAObjetivo)
+    local limiteAngulo = math.cos(math.rad(config.angulo / 2))
+    return productoPunto >= limiteAngulo
+end
+
+local function crearOActualizarEstrella(enemigo, torso)
+    local gui = marcasVisuales[enemigo]
+    if not gui then
+        gui = Instance.new("BillboardGui")
+        gui.Name = "EstrellaTracker"
+        gui.Size = UDim2.new(0, config.tamanoEstrella, 0, config.tamanoEstrella)
+        gui.SizeOffset = Vector2.new(0, 0)
+        gui.AlwaysOnTop = true
+        gui.Adornee = torso
+        gui.Parent = Workspace
+
+        local imagen = Instance.new("ImageLabel")
+        imagen.Name = "EstrellaImg"
+        imagen.Size = UDim2.new(1, 0, 1, 0)
+        imagen.BackgroundTransparency = 1
+        imagen.BorderSizePixel = 0
+        imagen.Image = customEstrellaAsset or idEstrellaFallback
+        imagen.Parent = gui
+
+        marcasVisuales[enemigo] = gui
+    else
+        gui.Size = UDim2.new(0, config.tamanoEstrella, 0, config.tamanoEstrella)
+    end
+
+    local imagenLabel = gui:FindFirstChild("EstrellaImg")
+    if imagenLabel then
+        imagenLabel.Rotation = (imagenLabel.Rotation + config.velocidadGiro) % 360
+    end
+end
+
+-- Inicialización
+aplicarAmbiente(true)
+if bgAudio then bgAudio:Play() end
+
+RunService.RenderStepped:Connect(function()
+    if not config.israelMode then return end
+
+    local miPersonaje = LocalPlayer.Character
+    if not miPersonaje or not miPersonaje:FindFirstChild("HumanoidRootPart") then return end
+    local miPosicion = miPersonaje.HumanoidRootPart.Position
+
+    for _, enemigo in pairs(Players:GetPlayers()) do
+        if enemigo ~= LocalPlayer and enemigo.Character and enemigo.Character:FindFirstChild("HumanoidRootPart") and enemigo.Character:FindFirstChild("Humanoid") and enemigo.Character.Humanoid.Health > 0 then
+            
+            local esMismoEquipo = (enemigo.Team ~= nil and enemigo.Team == LocalPlayer.Team) or (enemigo.TeamColor == LocalPlayer.TeamColor)
+            if esMismoEquipo and not config.detectarTeam then
+                removerMarcador(enemigo)
+                continue
+            end
+
+            local torso = enemigo.Character:FindFirstChild("Torso") 
+                       or enemigo.Character:FindFirstChild("UpperTorso") 
+                       or enemigo.Character.HumanoidRootPart
+                       
+            local posicionEnemigo = torso.Position
+            local distancia = (posicionEnemigo - miPosicion).Magnitude
+
+            local enRango = distancia <= config.rango
+            local yaFijado = jugadoresDetectados[enemigo] == true
+
+            if not yaFijado then
+                local enVista = estaEnCampoDeVision(posicionEnemigo)
+                if enRango and enVista then
+                    jugadoresDetectados[enemigo] = true
+                    sonarDetectedConDuck()
+                    crearOActualizarEstrella(enemigo, torso)
+                end
+            else
+                if enRango then
+                    crearOActualizarEstrella(enemigo, torso)
+                else
+                    removerMarcador(enemigo)
+                end
+            end
+        else
+            removerMarcador(enemigo)
+        end
+    end
+end)
+
+Players.PlayerRemoving:Connect(removerMarcador)
