@@ -9,27 +9,30 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
 -- ==========================================
--- ⚙️ CONFIGURACIÓN GENERAL
+-- ⚙️ CONFIGURACIÓN GENERAL "D666"
 -- ==========================================
 local config = {
-    israelMode = true,      -- ON / OFF global
-    rango = 60,
+    israelMode = true,
+    rango = 80,
     angulo = 75,
     volumenDetected = 5,
     volumenMusicaBase = 1.5,
+    escalaMundo = 4,        
+    tamanoTextoESP = 14,    
+    mostrarChams = true,    
     detectarTeam = false,
-    tamanoEstrella = 70,    -- Tamaño fijo en pantalla (Píxeles)
-    velocidadGiro = 6
+    velocidadGiro = 6,
+    hudAncho = 180,         -- NUEVO: Ancho del HUD
+    hudAlto = 60            -- NUEVO: Alto del HUD
 }
 
 local idImagenIsraelSky = "rbxassetid://7940780144"
-local idEstrellaFallback = "rbxassetid://7940780144"
+local idEstrellaFallback = "rbxassetid://10659616010"
 
 local archivoMusica = "hava.mp3"
 local archivoDetected = "detected.mp3"
 local archivoEstrella = "estrella.png"
 
--- Cargar archivos locales
 local function cargarAssetLocal(nombreBase)
     if not isfile then return nil end
     local posiblesNombres = {
@@ -45,22 +48,17 @@ local function cargarAssetLocal(nombreBase)
     return nil
 end
 
--- 1. 🌌 MANEJO DEL CIELO Y LUZ
+-- 1. 🌌 AMBIENTE Y MÚSICA
 local skyboxOriginales = {}
 for _, child in pairs(Lighting:GetChildren()) do
-    if child:IsA("Sky") then
-        table.insert(skyboxOriginales, child:Clone())
-    end
+    if child:IsA("Sky") then table.insert(skyboxOriginales, child:Clone()) end
 end
 
 local memeSky = Instance.new("Sky")
 memeSky.Name = "MemeSkyD666"
-memeSky.SkyboxBk = idImagenIsraelSky
-memeSky.SkyboxDn = idImagenIsraelSky
-memeSky.SkyboxFt = idImagenIsraelSky
-memeSky.SkyboxLf = idImagenIsraelSky
-memeSky.SkyboxRt = idImagenIsraelSky
-memeSky.SkyboxUp = idImagenIsraelSky
+memeSky.SkyboxBk = idImagenIsraelSky; memeSky.SkyboxDn = idImagenIsraelSky
+memeSky.SkyboxFt = idImagenIsraelSky; memeSky.SkyboxLf = idImagenIsraelSky
+memeSky.SkyboxRt = idImagenIsraelSky; memeSky.SkyboxUp = idImagenIsraelSky
 
 local function aplicarAmbiente(activo)
     if activo then
@@ -76,16 +74,12 @@ local function aplicarAmbiente(activo)
         Lighting.Ambient = Color3.fromRGB(128, 128, 128)
         Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
         Lighting.Brightness = 2
-        for _, sky in pairs(skyboxOriginales) do
-            sky:Clone().Parent = Lighting
-        end
+        for _, sky in pairs(skyboxOriginales) do sky:Clone().Parent = Lighting end
     end
 end
 
--- 2. 🎵 MANEJO DE AUDIO
 local bgAudio = nil
 local customMusica = cargarAssetLocal(archivoMusica)
-
 if customMusica then
     bgAudio = Instance.new("Sound")
     bgAudio.Name = "MemeBackgroundAudio"
@@ -103,70 +97,85 @@ if soundDetectedAsset then
     baseSoundDetected.Parent = SoundService
 end
 
-local customEstrellaAsset = cargarAssetLocal(archivoEstrella)
+local customEstrellaAsset = cargarAssetLocal(archivoEstrella) or idEstrellaFallback
 
 local function sonarDetectedConDuck()
     if not baseSoundDetected then return end
-    
-    if bgAudio and bgAudio.IsPlaying then
-        bgAudio.Volume = config.volumenMusicaBase * 0.2
-    end
-    
+    if bgAudio and bgAudio.IsPlaying then bgAudio.Volume = config.volumenMusicaBase * 0.2 end
     local sonidoClon = baseSoundDetected:Clone()
     sonidoClon.Volume = config.volumenDetected
     sonidoClon.Parent = SoundService
     sonidoClon:Play()
-    
-    task.delay(1.5, function()
-        if bgAudio then
-            bgAudio.Volume = config.volumenMusicaBase
-        end
-    end)
-    
+    task.delay(1.5, function() if bgAudio then bgAudio.Volume = config.volumenMusicaBase end end)
     game:GetService("Debris"):AddItem(sonidoClon, 3)
 end
 
--- 3. 🖥️ INTERFAZ GRÁFICA "D666"
+-- 3. 🖥️ INTERFAZ GRÁFICA "D666" Y ELEMENTOS VISUALES
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "D666_UI"
 ScreenGui.ResetOnSpawn = false
 pcall(function() ScreenGui.Parent = game:GetService("CoreGui") end)
 if not ScreenGui.Parent then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
+-- ⭐ ESTRELLAS DE LAS 4 ESQUINAS
+local cornerStars = {}
+local posicionesEsquinas = {
+    UDim2.new(0, 10, 0, 10),           -- Arriba Izquierda
+    UDim2.new(1, -10, 0, 10),          -- Arriba Derecha
+    UDim2.new(0, 10, 1, -10),          -- Abajo Izquierda
+    UDim2.new(1, -10, 1, -10)          -- Abajo Derecha
+}
+local anchorsEsquinas = {
+    Vector2.new(0, 0), Vector2.new(1, 0), 
+    Vector2.new(0, 1), Vector2.new(1, 1)
+}
+
+for i = 1, 4 do
+    local star = Instance.new("ImageLabel")
+    star.Size = UDim2.new(0, 85, 0, 85)
+    star.Position = posicionesEsquinas[i]
+    star.AnchorPoint = anchorsEsquinas[i]
+    star.BackgroundTransparency = 1
+    star.Image = customEstrellaAsset
+    star.Visible = config.israelMode
+    star.Parent = ScreenGui
+    table.insert(cornerStars, star)
+end
+
+-- 🎯 ESTRELLA DE SHIFTLOCK
+local shiftlockStar = Instance.new("ImageLabel")
+shiftlockStar.Size = UDim2.new(0, 35, 0, 35)
+shiftlockStar.Position = UDim2.new(0.5, 0, 0.5, -25) -- Elevada un poco
+shiftlockStar.AnchorPoint = Vector2.new(0.5, 0.5)
+shiftlockStar.BackgroundTransparency = 1
+shiftlockStar.Image = customEstrellaAsset
+shiftlockStar.Visible = false
+shiftlockStar.Parent = ScreenGui
+
+-- 🎛️ PANEL PRINCIPAL (Aumentado de tamaño para acomodar las nuevas opciones)
 local Panel = Instance.new("Frame")
 Panel.Name = "MainPanel"
-Panel.Size = UDim2.new(0, 210, 0, 250)
+Panel.Size = UDim2.new(0, 210, 0, 345) 
 Panel.Position = UDim2.new(0.05, 0, 0.3, 0)
 Panel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 Panel.BorderSizePixel = 0
 Panel.Active = true
 Panel.Parent = ScreenGui
-
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 8)
-UICorner.Parent = Panel
+Instance.new("UICorner", Panel).CornerRadius = UDim.new(0, 8)
 
 local Titulo = Instance.new("TextLabel")
 Titulo.Size = UDim2.new(1, 0, 0, 32)
 Titulo.BackgroundColor3 = Color3.fromRGB(0, 56, 184)
 Titulo.Text = " ✡️ D666"
 Titulo.TextColor3 = Color3.fromRGB(255, 255, 255)
-Titulo.Font = Enum.Font.GothamBold
-Titulo.TextSize = 14
-Titulo.TextXAlignment = Enum.TextXAlignment.Left
-Titulo.Parent = Panel
+Titulo.Font = Enum.Font.GothamBold; Titulo.TextSize = 14; Titulo.TextXAlignment = Enum.TextXAlignment.Left; Titulo.Parent = Panel
+Instance.new("UICorner", Titulo).CornerRadius = UDim.new(0, 8)
 
-local TituloCorner = Instance.new("UICorner")
-TituloCorner.CornerRadius = UDim.new(0, 8)
-TituloCorner.Parent = Titulo
-
--- Lógica Drag para el Panel
+-- Arrastrar Panel
 local dragging, dragStart, startPos
 Titulo.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = Panel.Position
+        dragging = true; dragStart = input.Position; startPos = Panel.Position
     end
 end)
 UserInputService.InputChanged:Connect(function(input)
@@ -176,40 +185,20 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = false
-    end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end
 end)
 
--- 🔘 BOTÓN BOTÓN DE TOGGLE FLOTANTE (ABRIR/CERRAR MENÚ)
 local ToggleButton = Instance.new("TextButton")
-ToggleButton.Name = "OpenMenuButton"
-ToggleButton.Size = UDim2.new(0, 45, 0, 45)
-ToggleButton.Position = UDim2.new(0.01, 0, 0.45, 0)
-ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 56, 184)
-ToggleButton.Text = "D"
-ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleButton.Font = Enum.Font.GothamBold
-ToggleButton.TextSize = 20
-ToggleButton.Active = true
-ToggleButton.Parent = ScreenGui
+ToggleButton.Size = UDim2.new(0, 45, 0, 45); ToggleButton.Position = UDim2.new(0.01, 0, 0.45, 0)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 56, 184); ToggleButton.Text = "D"; ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.Font = Enum.Font.GothamBold; ToggleButton.TextSize = 20; ToggleButton.Parent = ScreenGui
+Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(1, 0)
+local ToggleStroke = Instance.new("UIStroke"); ToggleStroke.Color = Color3.fromRGB(255, 255, 255); ToggleStroke.Thickness = 2; ToggleStroke.Parent = ToggleButton
 
-local ToggleCorner = Instance.new("UICorner")
-ToggleCorner.CornerRadius = UDim.new(1, 0) -- Redondo
-ToggleCorner.Parent = ToggleButton
-
-local ToggleStroke = Instance.new("UIStroke")
-ToggleStroke.Color = Color3.fromRGB(255, 255, 255)
-ToggleStroke.Thickness = 2
-ToggleStroke.Parent = ToggleButton
-
--- Hacer que el botón de Toggle también se pueda arrastrar por la pantalla
 local dragBtn, dragStartBtn, startPosBtn
 ToggleButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragBtn = true
-        dragStartBtn = input.Position
-        startPosBtn = ToggleButton.Position
+        dragBtn = true; dragStartBtn = input.Position; startPosBtn = ToggleButton.Position
     end
 end)
 UserInputService.InputChanged:Connect(function(input)
@@ -219,184 +208,262 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragBtn = false
-    end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragBtn = false end
 end)
 
--- Función para alternar visibilidad del Panel
-local function toggleMenu()
-    Panel.Visible = not Panel.Visible
-end
-
+local function toggleMenu() Panel.Visible = not Panel.Visible end
 ToggleButton.MouseButton1Click:Connect(toggleMenu)
+UserInputService.InputBegan:Connect(function(input, processed) if not processed and input.KeyCode == Enum.KeyCode.LeftControl then toggleMenu() end end)
 
--- Atajo de teclado: Tecla Ctrl Izquierdo para abrir/cerrar
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if not gameProcessed and input.KeyCode == Enum.KeyCode.LeftControl then
-        toggleMenu()
-    end
-end)
-
--- BOTÓN TOGGLE GLOBAL: ISRAEL MODE
 local BtnIsraelMode = Instance.new("TextButton")
-BtnIsraelMode.Size = UDim2.new(0.9, 0, 0, 30)
-BtnIsraelMode.Position = UDim2.new(0.05, 0, 0, 40)
-BtnIsraelMode.BackgroundColor3 = Color3.fromRGB(0, 170, 80)
-BtnIsraelMode.Text = "ISRAEL MODE: ON"
-BtnIsraelMode.TextColor3 = Color3.fromRGB(255, 255, 255)
-BtnIsraelMode.Font = Enum.Font.GothamBold
-BtnIsraelMode.TextSize = 11
-BtnIsraelMode.Parent = Panel
-
-local BtnIsraelCorner = Instance.new("UICorner")
-BtnIsraelCorner.CornerRadius = UDim.new(0, 5)
-BtnIsraelCorner.Parent = BtnIsraelMode
+BtnIsraelMode.Size = UDim2.new(0.9, 0, 0, 30); BtnIsraelMode.Position = UDim2.new(0.05, 0, 0, 40)
+BtnIsraelMode.BackgroundColor3 = Color3.fromRGB(0, 170, 80); BtnIsraelMode.Text = "ISRAEL MODE: ON"
+BtnIsraelMode.TextColor3 = Color3.fromRGB(255, 255, 255); BtnIsraelMode.Font = Enum.Font.GothamBold; BtnIsraelMode.TextSize = 11; BtnIsraelMode.Parent = Panel
+Instance.new("UICorner", BtnIsraelMode).CornerRadius = UDim.new(0, 5)
 
 local function crearFila(nombre, yOffset, valorDefecto, alCambiar)
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0.6, -10, 0, 22)
-    label.Position = UDim2.new(0, 10, 0, yOffset)
-    label.BackgroundTransparency = 1
-    label.Text = nombre
-    label.TextColor3 = Color3.fromRGB(200, 200, 200)
-    label.Font = Enum.Font.Gotham
-    label.TextSize = 11
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = Panel
+    label.Size = UDim2.new(0.6, -10, 0, 22); label.Position = UDim2.new(0, 10, 0, yOffset)
+    label.BackgroundTransparency = 1; label.Text = nombre; label.TextColor3 = Color3.fromRGB(200, 200, 200)
+    label.Font = Enum.Font.Gotham; label.TextSize = 11; label.TextXAlignment = Enum.TextXAlignment.Left; label.Parent = Panel
 
     local box = Instance.new("TextBox")
-    box.Size = UDim2.new(0.35, -10, 0, 22)
-    box.Position = UDim2.new(0.6, 5, 0, yOffset)
-    box.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-    box.TextColor3 = Color3.fromRGB(255, 255, 255)
-    box.Text = tostring(valorDefecto)
-    box.Font = Enum.Font.GothamBold
-    box.TextSize = 11
-    box.Parent = Panel
+    box.Size = UDim2.new(0.35, -10, 0, 22); box.Position = UDim2.new(0.6, 5, 0, yOffset)
+    box.BackgroundColor3 = Color3.fromRGB(35, 35, 35); box.TextColor3 = Color3.fromRGB(255, 255, 255)
+    box.Text = tostring(valorDefecto); box.Font = Enum.Font.GothamBold; box.TextSize = 11; box.Parent = Panel
+    Instance.new("UICorner", box).CornerRadius = UDim.new(0, 4)
 
-    local boxCorner = Instance.new("UICorner")
-    boxCorner.CornerRadius = UDim.new(0, 4)
-    boxCorner.Parent = box
-
-    box.FocusLost:Connect(function()
-        local num = tonumber(box.Text)
-        if num then alCambiar(num) else box.Text = tostring(valorDefecto) end
-    end)
+    box.FocusLost:Connect(function() local num = tonumber(box.Text); if num then alCambiar(num) else box.Text = tostring(valorDefecto) end end)
 end
 
+-- 🆕 Se agregaron las filas para configurar el tamaño de la UI del objetivo
 crearFila("Rango:", 80, config.rango, function(val) config.rango = val end)
-crearFila("Ángulo FOV:", 108, config.angulo, function(val) config.angulo = val end)
-crearFila("Vol. Alert:", 136, config.volumenDetected, function(val) config.volumenDetected = val end)
+crearFila("Ángulo FOV:", 106, config.angulo, function(val) config.angulo = val end)
+crearFila("Vol. Alert:", 132, config.volumenDetected, function(val) config.volumenDetected = val end)
+crearFila("Tam. Estrella:", 158, config.escalaMundo, function(val) config.escalaMundo = val end)
+crearFila("Tam. Texto:", 184, config.tamanoTextoESP, function(val) config.tamanoTextoESP = val end)
+
+-- Variables para el HUD del Target
+local closestTargetHUD -- Se define más abajo
+
+crearFila("HUD Ancho:", 210, config.hudAncho, function(val) 
+    config.hudAncho = val
+    if closestTargetHUD then closestTargetHUD.Size = UDim2.new(0, config.hudAncho, 0, config.hudAlto) end
+end)
+crearFila("HUD Alto:", 236, config.hudAlto, function(val) 
+    config.hudAlto = val
+    if closestTargetHUD then closestTargetHUD.Size = UDim2.new(0, config.hudAncho, 0, config.hudAlto) end
+end)
+
+local BtnChams = Instance.new("TextButton")
+BtnChams.Size = UDim2.new(0.9, 0, 0, 26); BtnChams.Position = UDim2.new(0.05, 0, 0, 270)
+BtnChams.BackgroundColor3 = Color3.fromRGB(0, 110, 200); BtnChams.Text = "Chams Azul: SÍ"
+BtnChams.TextColor3 = Color3.fromRGB(255, 255, 255); BtnChams.Font = Enum.Font.GothamBold; BtnChams.TextSize = 11; BtnChams.Parent = Panel
+Instance.new("UICorner", BtnChams).CornerRadius = UDim.new(0, 4)
+
+BtnChams.MouseButton1Click:Connect(function()
+    config.mostrarChams = not config.mostrarChams
+    BtnChams.Text = config.mostrarChams and "Chams Azul: SÍ" or "Chams Azul: NO"
+    BtnChams.BackgroundColor3 = config.mostrarChams and Color3.fromRGB(0, 110, 200) or Color3.fromRGB(100, 100, 100)
+end)
 
 local BtnTeam = Instance.new("TextButton")
-BtnTeam.Size = UDim2.new(0.9, 0, 0, 26)
-BtnTeam.Position = UDim2.new(0.05, 0, 0, 168)
-BtnTeam.BackgroundColor3 = Color3.fromRGB(170, 40, 40)
-BtnTeam.Text = "Detectar Team: NO"
-BtnTeam.TextColor3 = Color3.fromRGB(255, 255, 255)
-BtnTeam.Font = Enum.Font.GothamBold
-BtnTeam.TextSize = 11
-BtnTeam.Parent = Panel
-
-local BtnTeamCorner = Instance.new("UICorner")
-BtnTeamCorner.CornerRadius = UDim.new(0, 4)
-BtnTeamCorner.Parent = BtnTeam
+BtnTeam.Size = UDim2.new(0.9, 0, 0, 26); BtnTeam.Position = UDim2.new(0.05, 0, 0, 302)
+BtnTeam.BackgroundColor3 = Color3.fromRGB(170, 40, 40); BtnTeam.Text = "Detectar Team: NO"
+BtnTeam.TextColor3 = Color3.fromRGB(255, 255, 255); BtnTeam.Font = Enum.Font.GothamBold; BtnTeam.TextSize = 11; BtnTeam.Parent = Panel
+Instance.new("UICorner", BtnTeam).CornerRadius = UDim.new(0, 4)
 
 BtnTeam.MouseButton1Click:Connect(function()
     config.detectarTeam = not config.detectarTeam
-    if config.detectarTeam then
-        BtnTeam.Text = "Detectar Team: SÍ"
-        BtnTeam.BackgroundColor3 = Color3.fromRGB(40, 170, 40)
-    else
-        BtnTeam.Text = "Detectar Team: NO"
-        BtnTeam.BackgroundColor3 = Color3.fromRGB(170, 40, 40)
-    end
+    BtnTeam.Text = config.detectarTeam and "Detectar Team: SÍ" or "Detectar Team: NO"
+    BtnTeam.BackgroundColor3 = config.detectarTeam and Color3.fromRGB(40, 170, 40) or Color3.fromRGB(170, 40, 40)
 end)
 
--- 4. 📐 RASTREO Y LÓGICA
+-- 4. 📐 LÓGICA CORE DE RASTREO
 local jugadoresDetectados = {}
 local marcasVisuales = {}
 
 local function removerMarcador(jugador)
-    if marcasVisuales[jugador] then
-        marcasVisuales[jugador]:Destroy()
-        marcasVisuales[jugador] = nil
+    if marcasVisuales[jugador] then 
+        if marcasVisuales[jugador].estrella then marcasVisuales[jugador].estrella:Destroy() end
+        if marcasVisuales[jugador].esp then marcasVisuales[jugador].esp:Destroy() end
+        if marcasVisuales[jugador].chams then marcasVisuales[jugador].chams:Destroy() end
+        marcasVisuales[jugador] = nil 
     end
     jugadoresDetectados[jugador] = nil
 end
 
-local function limpiarTodo()
-    for jugador in pairs(marcasVisuales) do
-        removerMarcador(jugador)
-    end
-end
-
 BtnIsraelMode.MouseButton1Click:Connect(function()
     config.israelMode = not config.israelMode
+    BtnIsraelMode.Text = config.israelMode and "ISRAEL MODE: ON" or "ISRAEL MODE: OFF"
+    BtnIsraelMode.BackgroundColor3 = config.israelMode and Color3.fromRGB(0, 170, 80) or Color3.fromRGB(170, 40, 40)
+    aplicarAmbiente(config.israelMode)
+    
     if config.israelMode then
-        BtnIsraelMode.Text = "ISRAEL MODE: ON"
-        BtnIsraelMode.BackgroundColor3 = Color3.fromRGB(0, 170, 80)
-        aplicarAmbiente(true)
         if bgAudio then bgAudio:Play() end
+        for _, star in pairs(cornerStars) do star.Visible = true end
     else
-        BtnIsraelMode.Text = "ISRAEL MODE: OFF"
-        BtnIsraelMode.BackgroundColor3 = Color3.fromRGB(170, 40, 40)
-        aplicarAmbiente(false)
         if bgAudio then bgAudio:Stop() end
-        limpiarTodo()
+        for jugador in pairs(marcasVisuales) do removerMarcador(jugador) end
+        for _, star in pairs(cornerStars) do star.Visible = false end
+        shiftlockStar.Visible = false
     end
 end)
 
-local function estaEnCampoDeVision(posicionObjetivo)
-    local camaraCF = Camera.CFrame
-    local direccionAObjetivo = (posicionObjetivo - camaraCF.Position).Unit
-    local vectorMirada = camaraCF.LookVector
-    local productoPunto = vectorMirada:Dot(direccionAObjetivo)
-    local limiteAngulo = math.cos(math.rad(config.angulo / 2))
-    return productoPunto >= limiteAngulo
+local function estaEnCampoDeVision(pos)
+    local cf = Camera.CFrame
+    return cf.LookVector:Dot((pos - cf.Position).Unit) >= math.cos(math.rad(config.angulo / 2))
 end
 
-local function crearOActualizarEstrella(enemigo, torso)
-    local gui = marcasVisuales[enemigo]
-    if not gui then
-        gui = Instance.new("BillboardGui")
-        gui.Name = "EstrellaTracker"
-        gui.Size = UDim2.new(0, config.tamanoEstrella, 0, config.tamanoEstrella)
-        gui.SizeOffset = Vector2.new(0, 0)
-        gui.AlwaysOnTop = true
-        gui.Adornee = torso
-        gui.Parent = Workspace
+local function actualizarPartes3D(enemigo, personaje, torso)
+    local datosVis = marcasVisuales[enemigo]
+    
+    if not datosVis then
+        datosVis = {}
+        
+        local guiEstrella = Instance.new("BillboardGui")
+        guiEstrella.Name = "EstrellaTracker"; guiEstrella.Size = UDim2.new(config.escalaMundo, 0, config.escalaMundo, 0)
+        guiEstrella.AlwaysOnTop = true; guiEstrella.Adornee = torso; guiEstrella.Parent = Workspace
 
-        local imagen = Instance.new("ImageLabel")
-        imagen.Name = "EstrellaImg"
-        imagen.Size = UDim2.new(1, 0, 1, 0)
-        imagen.BackgroundTransparency = 1
-        imagen.BorderSizePixel = 0
-        imagen.Image = customEstrellaAsset or idEstrellaFallback
-        imagen.Parent = gui
-
-        marcasVisuales[enemigo] = gui
-    else
-        gui.Size = UDim2.new(0, config.tamanoEstrella, 0, config.tamanoEstrella)
+        local imgEstrella = Instance.new("ImageLabel")
+        imgEstrella.Name = "EstrellaImg"; imgEstrella.Size = UDim2.new(1, 0, 1, 0); imgEstrella.BackgroundTransparency = 1
+        imgEstrella.BorderSizePixel = 0; imgEstrella.Image = customEstrellaAsset; imgEstrella.Parent = guiEstrella
+        
+        local guiESP = Instance.new("BillboardGui")
+        guiESP.Name = "ESPTracker"; guiESP.Size = UDim2.new(0, 150, 0, 40); guiESP.StudsOffset = Vector3.new(0, 3, 0) 
+        guiESP.AlwaysOnTop = true; guiESP.Adornee = personaje:FindFirstChild("Head") or torso; guiESP.Parent = Workspace
+        
+        local txtESP = Instance.new("TextLabel")
+        txtESP.Name = "NameESP"; txtESP.Size = UDim2.new(1, 0, 1, 0); txtESP.BackgroundTransparency = 1
+        txtESP.Text = enemigo.DisplayName; txtESP.TextColor3 = Color3.fromRGB(0, 30, 120)
+        txtESP.TextStrokeColor3 = Color3.fromRGB(255, 255, 255); txtESP.TextStrokeTransparency = 0.2
+        txtESP.Font = Enum.Font.GothamBlack; txtESP.TextSize = config.tamanoTextoESP; txtESP.Parent = guiESP
+        
+        local chams = Instance.new("Highlight")
+        chams.Name = "ChamsTracker"; chams.Adornee = personaje; chams.FillColor = Color3.fromRGB(0, 0, 100) 
+        chams.FillTransparency = 0.4; chams.OutlineColor = Color3.fromRGB(0, 56, 184); chams.OutlineTransparency = 0; chams.Parent = Workspace
+        
+        datosVis.estrella = guiEstrella
+        datosVis.esp = guiESP
+        datosVis.chams = chams
+        marcasVisuales[enemigo] = datosVis
     end
 
-    local imagenLabel = gui:FindFirstChild("EstrellaImg")
-    if imagenLabel then
-        imagenLabel.Rotation = (imagenLabel.Rotation + config.velocidadGiro) % 360
+    if datosVis.estrella then
+        datosVis.estrella.Size = UDim2.new(config.escalaMundo, 0, config.escalaMundo, 0)
+        local img = datosVis.estrella:FindFirstChild("EstrellaImg")
+        if img then img.Rotation = (img.Rotation + config.velocidadGiro) % 360 end
+    end
+    
+    if datosVis.esp and datosVis.esp:FindFirstChild("NameESP") then
+        datosVis.esp.NameESP.TextSize = config.tamanoTextoESP
+    end
+    
+    if datosVis.chams then
+        datosVis.chams.Enabled = config.mostrarChams
     end
 end
 
--- Inicialización
+-- 🆕 TARGET INFO UI (HUD FLOTANTE)
+closestTargetHUD = Instance.new("Frame")
+closestTargetHUD.Name = "ClosestTargetHUD"
+closestTargetHUD.Size = UDim2.new(0, config.hudAncho, 0, config.hudAlto) -- Se basa en la configuración
+closestTargetHUD.Position = UDim2.new(0, 70, 0, 100) 
+closestTargetHUD.AnchorPoint = Vector2.new(0, 0)
+closestTargetHUD.BackgroundColor3 = Color3.fromRGB(0, 20, 50)
+closestTargetHUD.BackgroundTransparency = 0.4 
+closestTargetHUD.BorderSizePixel = 0
+closestTargetHUD.Visible = false 
+closestTargetHUD.Active = true -- NECESARIO PARA ARRASTRAR
+closestTargetHUD.Parent = ScreenGui
+Instance.new("UICorner", closestTargetHUD).CornerRadius = UDim.new(0, 6)
+
+local avatarImgHUD = Instance.new("ImageLabel")
+avatarImgHUD.Size = UDim2.new(0, 40, 0, 40)
+avatarImgHUD.Position = UDim2.new(0, 10, 0, 10)
+avatarImgHUD.BackgroundTransparency = 1
+avatarImgHUD.Parent = closestTargetHUD
+Instance.new("UICorner", avatarImgHUD).CornerRadius = UDim.new(0, 6)
+
+local txtTargetNameHUD = Instance.new("TextLabel")
+txtTargetNameHUD.Size = UDim2.new(1, -60, 0, 25) -- Tamaño relativo para que se ajuste si el ancho crece
+txtTargetNameHUD.Position = UDim2.new(0, 55, 0, 10)
+txtTargetNameHUD.BackgroundTransparency = 1
+txtTargetNameHUD.Text = "Target name"
+txtTargetNameHUD.TextColor3 = Color3.fromRGB(255, 255, 255)
+txtTargetNameHUD.Font = Enum.Font.GothamBold
+txtTargetNameHUD.TextSize = 14
+txtTargetNameHUD.TextXAlignment = Enum.TextXAlignment.Left
+txtTargetNameHUD.Parent = closestTargetHUD
+
+local healthBgHUD = Instance.new("Frame")
+healthBgHUD.Name = "HealthBg"
+healthBgHUD.Size = UDim2.new(1, -60, 0, 8) -- Tamaño relativo para adaptarse al ancho
+healthBgHUD.Position = UDim2.new(0, 55, 0, 38)
+healthBgHUD.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+healthBgHUD.BorderSizePixel = 0
+healthBgHUD.Parent = closestTargetHUD
+Instance.new("UICorner", healthBgHUD).CornerRadius = UDim.new(1, 0)
+
+local healthFillHUD = Instance.new("Frame")
+healthFillHUD.Name = "HealthFill"
+healthFillHUD.Size = UDim2.new(1, 0, 1, 0) 
+healthFillHUD.BackgroundColor3 = Color3.fromRGB(0, 180, 255) 
+healthFillHUD.BorderSizePixel = 0
+healthFillHUD.Parent = healthBgHUD
+Instance.new("UICorner", healthFillHUD).CornerRadius = UDim.new(1, 0)
+
+-- 🖐️ LÓGICA PARA ARRASTRAR EL HUD (Solo cuando Panel.Visible == true)
+local dragHud, dragStartHud, startPosHud
+
+closestTargetHUD.InputBegan:Connect(function(input)
+    -- SOLO PERMITE ARRASTRAR SI EL MENÚ ESTÁ ABIERTO
+    if Panel.Visible and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+        dragHud = true
+        dragStartHud = input.Position
+        startPosHud = closestTargetHUD.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragHud and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStartHud
+        closestTargetHUD.Position = UDim2.new(startPosHud.X.Scale, startPosHud.X.Offset + delta.X, startPosHud.Y.Scale, startPosHud.Y.Offset + delta.Y)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragHud = false
+    end
+end)
+
 aplicarAmbiente(true)
 if bgAudio then bgAudio:Play() end
+
+local closestEnemy = nil
+local closestDist = math.huge
 
 RunService.RenderStepped:Connect(function()
     if not config.israelMode then return end
 
+    for _, star in pairs(cornerStars) do
+        star.Rotation = (star.Rotation + config.velocidadGiro) % 360
+    end
+
+    if UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter then
+        shiftlockStar.Visible = true
+        shiftlockStar.Rotation = (shiftlockStar.Rotation + config.velocidadGiro) % 360
+    else
+        shiftlockStar.Visible = false
+    end
+
     local miPersonaje = LocalPlayer.Character
     if not miPersonaje or not miPersonaje:FindFirstChild("HumanoidRootPart") then return end
     local miPosicion = miPersonaje.HumanoidRootPart.Position
+
+    closestEnemy = nil
+    closestDist = math.huge
 
     for _, enemigo in pairs(Players:GetPlayers()) do
         if enemigo ~= LocalPlayer and enemigo.Character and enemigo.Character:FindFirstChild("HumanoidRootPart") and enemigo.Character:FindFirstChild("Humanoid") and enemigo.Character.Humanoid.Health > 0 then
@@ -407,32 +474,59 @@ RunService.RenderStepped:Connect(function()
                 continue
             end
 
-            local torso = enemigo.Character:FindFirstChild("Torso") 
-                       or enemigo.Character:FindFirstChild("UpperTorso") 
-                       or enemigo.Character.HumanoidRootPart
-                       
-            local posicionEnemigo = torso.Position
-            local distancia = (posicionEnemigo - miPosicion).Magnitude
-
+            local torso = enemigo.Character:FindFirstChild("Torso") or enemigo.Character:FindFirstChild("UpperTorso") or enemigo.Character.HumanoidRootPart
+            local distancia = (torso.Position - miPosicion).Magnitude
             local enRango = distancia <= config.rango
             local yaFijado = jugadoresDetectados[enemigo] == true
 
             if not yaFijado then
-                local enVista = estaEnCampoDeVision(posicionEnemigo)
+                local enVista = estaEnCampoDeVision(torso.Position)
                 if enRango and enVista then
                     jugadoresDetectados[enemigo] = true
                     sonarDetectedConDuck()
-                    crearOActualizarEstrella(enemigo, torso)
+                    actualizarPartes3D(enemigo, enemigo.Character, torso)
+                    
+                    if distancia < closestDist then
+                        closestDist = distancia
+                        closestEnemy = enemigo
+                    end
                 end
             else
-                if enRango then
-                    crearOActualizarEstrella(enemigo, torso)
-                else
-                    removerMarcador(enemigo)
+                if enRango then 
+                    actualizarPartes3D(enemigo, enemigo.Character, torso)
+                    
+                    if distancia < closestDist then
+                        closestDist = distancia
+                        closestEnemy = enemigo
+                    end
+                else 
+                    removerMarcador(enemigo) 
                 end
             end
         else
             removerMarcador(enemigo)
+        end
+    end
+
+    -- 🔄 ACTUALIZACIÓN DEL HUD ÚNICO
+    if closestEnemy then
+        closestTargetHUD.Visible = true
+        txtTargetNameHUD.Text = closestEnemy.Name
+        avatarImgHUD.Image = "rbxthumb://type=AvatarHeadShot&id=" .. closestEnemy.UserId .. "&w=150&h=150"
+        local humanoid = closestEnemy.Character:FindFirstChild("Humanoid")
+        if humanoid then
+            local porcentajeVida = math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1)
+            healthFillHUD.Size = UDim2.new(porcentajeVida, 0, 1, 0)
+        end
+    else
+        -- MODO EDICIÓN: Si abres el menú, el HUD se muestra para que puedas acomodarlo
+        if Panel.Visible then
+            closestTargetHUD.Visible = true
+            txtTargetNameHUD.Text = "[Modo Edición]"
+            avatarImgHUD.Image = "" -- Sin avatar en modo de prueba
+            healthFillHUD.Size = UDim2.new(0.5, 0, 1, 0) -- Vida a la mitad de prueba
+        else
+            closestTargetHUD.Visible = false
         end
     end
 end)
