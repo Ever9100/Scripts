@@ -1,0 +1,271 @@
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+
+local Options = Library.Options
+local Toggles = Library.Toggles
+
+-- Servicios de Roblox
+local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local LocalPlayer = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+local isAlive = true -- Control global para matar el proceso de forma limpia
+
+-- Pre-creación del buffer optimizado para Auto Collect (Zero-GC / Sin Lag)
+local Event = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Network"):WaitForChild("Events"):WaitForChild("ToolCollect")
+local rawBytes = { 66, 83, 82, 80, 1, 0, 0 }
+local cachedBuffer = buffer.create(#rawBytes)
+for i = 1, #rawBytes do
+    buffer.writeu8(cachedBuffer, i - 1, rawBytes[i])
+end
+
+-- Ventana Principal (Estilo D666Scripts con su ícono y título exactos)
+local Window = Library:CreateWindow({
+	Title = "D666Scripts",
+	Footer = "Brainrot Hunter Premium",
+	Icon = "rbxassetid://17892890570",
+	NotifySide = "Right",
+	ShowCustomCursor = true,
+})
+
+-- Pestañas
+local Tabs = {
+	Main = Window:AddTab("Main", "user"),
+	["UI Settings"] = Window:AddTab("UI Settings", "settings"),
+}
+
+-- =================================================================
+-- 1. SECCIÓN: JUGADOR & AUTO FARMING (Player Options)
+-- =================================================================
+local PlayerGroupBox = Tabs.Main:AddLeftGroupbox("Player & Farming")
+
+-- Zoom de Cámara
+PlayerGroupBox:AddSlider("MaxZoomSlider", { Text = "Max Camera Zoom", Default = 1000, Min = 128, Max = 5000, Rounding = 0 })
+Options.MaxZoomSlider:OnChanged(function()
+	LocalPlayer.CameraMaxZoomDistance = Options.MaxZoomSlider.Value
+end)
+LocalPlayer.CameraMaxZoomDistance = Options.MaxZoomSlider.Value
+
+PlayerGroupBox:AddDivider()
+
+-- Auto Collect Pollen (Totalmente optimizado sin fugas de memoria)
+PlayerGroupBox:AddToggle("AutoToolCollect", { Text = "Auto Collect Pollen", Default = false })
+
+Toggles.AutoToolCollect:OnChanged(function(State)
+	if State then
+		task.spawn(function()
+			while Toggles.AutoToolCollect.Value and isAlive do
+				Event:FireServer(cachedBuffer)
+				task.wait(0.1)
+			end
+		end)
+	end
+end)
+
+PlayerGroupBox:AddDivider()
+
+-- WalkSpeed y JumpPower
+PlayerGroupBox:AddToggle("EnableSpeed", { Text = "Enable Speed", Default = false })
+PlayerGroupBox:AddSlider("WalkSpeedSlider", { Text = "WalkSpeed", Default = 95, Min = 16, Max = 300, Rounding = 0 })
+
+PlayerGroupBox:AddToggle("EnableJump", { Text = "Enable JumpPower", Default = false })
+PlayerGroupBox:AddSlider("JumpPowerSlider", { Text = "JumpPower", Default = 100, Min = 50, Max = 400, Rounding = 0 })
+
+task.spawn(function()
+	while isAlive do
+		local char = LocalPlayer.Character
+		local hum = char and char:FindFirstChildOfClass("Humanoid")
+		if hum then
+			if Toggles.EnableSpeed and Toggles.EnableSpeed.Value then
+				hum.WalkSpeed = Options.WalkSpeedSlider.Value
+			end
+			if Toggles.EnableJump and Toggles.EnableJump.Value then
+				hum.UseJumpPower = true
+				hum.JumpPower = Options.JumpPowerSlider.Value
+			end
+		end
+		task.wait(0.2)
+	end
+end)
+
+-- Infinite Jump
+local jumpConnection = nil
+PlayerGroupBox:AddToggle("InfiniteJump", { Text = "Infinite Jump", Default = false })
+
+Toggles.InfiniteJump:OnChanged(function(State)
+	if jumpConnection then
+		jumpConnection:Disconnect()
+		jumpConnection = nil
+	end
+
+	if State then
+		jumpConnection = UserInputService.JumpRequest:Connect(function()
+			if not isAlive then return end
+			local char = LocalPlayer.Character
+			local hum = char and char:FindFirstChildOfClass("Humanoid")
+			if hum then
+				hum:ChangeState(Enum.HumanoidStateType.Jumping)
+			end
+		end)
+	end
+end)
+
+-- =================================================================
+-- 2. SECCIÓN: COGMOWER TRACKER (ESP Gold Cogmower)
+-- =================================================================
+local ESPGroupBox = Tabs.Main:AddRightGroupbox("Cogmower Tracker")
+
+local TARGET_NAME = "Gold Cogmower"
+local ActiveESP = {}
+
+ESPGroupBox:AddToggle("EspTrackerToggle", { Text = "Enable Cogmower ESP", Default = true }):AddColorPicker("ESPColor", {
+	Default = Color3.fromRGB(255, 255, 0),
+	Title = "ESP Color",
+})
+
+ESPGroupBox:AddToggle("DistanceToggle", { Text = "Enable Distance Filter", Default = true })
+ESPGroupBox:AddSlider("MaxDistanceSlider", { Text = "Max Distance", Default = 5000, Min = 100, Max = 100000, Rounding = 0 })
+ESPGroupBox:AddToggle("NameToggle", { Text = "Show Target Name", Default = true })
+
+local function clearAllESP()
+	for target, data in pairs(ActiveESP) do
+		if data.Highlight then data.Highlight:Destroy() end
+		if data.Billboard then data.Billboard:Destroy() end
+	end
+	table.clear(ActiveESP)
+end
+
+Toggles.EspTrackerToggle:OnChanged(function()
+	if not Toggles.EspTrackerToggle.Value then
+		clearAllESP()
+	end
+end)
+
+Options.ESPColor:OnChanged(function(newColor)
+	for _, data in pairs(ActiveESP) do
+		if data.Highlight then data.Highlight.FillColor = newColor end
+		if data.Text then data.Text.TextColor3 = newColor end
+	end
+end)
+
+local function applyESP(target)
+	if not target or target.Name ~= TARGET_NAME or ActiveESP[target] then return end
+
+	local adorneePart = target:IsA("Model") and (target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart")) or target
+	if not adorneePart then return end
+
+	local pickedColor = Options.ESPColor.Value
+
+	-- Highlight (Chams)
+	local highlight = Instance.new("Highlight")
+	highlight.Name = "CamFollower_" .. target:GetDebugId()
+	highlight.Adornee = target
+	highlight.FillColor = pickedColor
+	highlight.FillTransparency = 0.3
+	highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+	highlight.OutlineTransparency = 0
+	highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	highlight.Parent = camera
+
+	-- BillboardGui (ESP Text)
+	local billboard = Instance.new("BillboardGui")
+	billboard.Name = "CamText_" .. target:GetDebugId()
+	billboard.Size = UDim2.new(0, 200, 0, 50)
+	billboard.StudsOffset = Vector3.new(0, 4.5, 0)
+	billboard.AlwaysOnTop = true
+	billboard.Adornee = adorneePart
+
+	local textLabel = Instance.new("TextLabel")
+	textLabel.Size = UDim2.new(1, 0, 1, 0)
+	textLabel.BackgroundTransparency = 1
+	textLabel.TextColor3 = pickedColor
+	textLabel.TextSize = 14
+	textLabel.Font = Enum.Font.RobotoMono
+	textLabel.TextStrokeTransparency = 0
+	textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+	textLabel.Parent = billboard
+	billboard.Parent = camera
+
+	ActiveESP[target] = {
+		Highlight = highlight,
+		Billboard = billboard,
+		Text = textLabel,
+		Part = adorneePart
+	}
+end
+
+-- Motor de escaneo de Gold Cogmower (Control de frecuencia sin impacto en FPS)
+task.spawn(function()
+	while isAlive do
+		if Toggles.EspTrackerToggle and Toggles.EspTrackerToggle.Value then
+			local char = LocalPlayer.Character
+			local root = char and char:FindFirstChild("HumanoidRootPart")
+
+			for _, child in ipairs(Workspace:GetChildren()) do
+				if child.Name == TARGET_NAME then
+					local adorneePart = child:IsA("Model") and (child.PrimaryPart or child:FindFirstChildWhichIsA("BasePart")) or child
+					if adorneePart then
+						local dist = root and (adorneePart.Position - root.Position).Magnitude or 0
+						local isInRange = not Toggles.DistanceToggle.Value or (dist <= Options.MaxDistanceSlider.Value)
+
+						if isInRange then
+							if not ActiveESP[child] then
+								applyESP(child)
+							else
+								local displayString = ""
+								if Toggles.NameToggle.Value then displayString = child.Name .. "\n" end
+								displayString = displayString .. math.floor(dist) .. "m"
+								ActiveESP[child].Text.Text = displayString
+							end
+						else
+							if ActiveESP[child] then
+								if ActiveESP[child].Highlight then ActiveESP[child].Highlight:Destroy() end
+								if ActiveESP[child].Billboard then ActiveESP[child].Billboard:Destroy() end
+								ActiveESP[child] = nil
+							end
+						end
+					end
+				end
+			end
+		end
+		task.wait(0.2)
+	end
+end)
+
+-- =================================================================
+-- 3. CONFIGURACIÓN FINAL & DESTRUCCIÓN (Menu Settings)
+-- =================================================================
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
+ThemeManager:SetFolder("D666Scripts")
+SaveManager:SetFolder("D666Scripts/configs")
+
+local MenuGroup = Tabs["UI Settings"]:AddLeftGroupbox("Menu Settings")
+
+-- Función de eliminación completa (Kill Script)
+MenuGroup:AddButton({ 
+	Text = "Kill / Destroy Script", 
+	Func = function() 
+		isAlive = false -- Detiene todos los bucles de fondo
+		if jumpConnection then 
+			jumpConnection:Disconnect() 
+			jumpConnection = nil 
+		end
+		clearAllESP()   -- Borra elementos visuales activos
+		Library:Unload() -- Destruye la interfaz gráfica por completo
+	end 
+})
+
+MenuGroup:AddLabel("Menu Bind"):AddKeyPicker("MenuKeybind", { Default = "LeftShift", NoUI = true, Text = "Menu Keybind" })
+
+Library.ToggleKeybind = Options.MenuKeybind 
+
+SaveManager:BuildConfigSection(Tabs["UI Settings"])
+ThemeManager:ApplyToTab(Tabs["UI Settings"])
+SaveManager:LoadAutoloadConfig()
