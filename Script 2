@@ -14,9 +14,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 local camera = workspace.CurrentCamera
-local isAlive = true -- Control global para matar el proceso de forma limpia
+local isAlive = true -- Variable de control global
 
--- Pre-creación del buffer optimizado para Auto Collect (Zero-GC / Sin Lag)
+-- Pre-creación del buffer optimizado para Auto Collect (Zero-GC)
 local Event = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Network"):WaitForChild("Events"):WaitForChild("ToolCollect")
 local rawBytes = { 66, 83, 82, 80, 1, 0, 0 }
 local cachedBuffer = buffer.create(#rawBytes)
@@ -24,7 +24,7 @@ for i = 1, #rawBytes do
     buffer.writeu8(cachedBuffer, i - 1, rawBytes[i])
 end
 
--- Ventana Principal (Estilo D666Scripts con su ícono y título exactos)
+-- Ventana Principal
 local Window = Library:CreateWindow({
 	Title = "D666Scripts",
 	Footer = "Brainrot Hunter Premium",
@@ -40,7 +40,7 @@ local Tabs = {
 }
 
 -- =================================================================
--- 1. SECCIÓN: JUGADOR & AUTO FARMING (Player Options)
+-- 1. SECCIÓN: JUGADOR & AUTO FARMING
 -- =================================================================
 local PlayerGroupBox = Tabs.Main:AddLeftGroupbox("Player & Farming")
 
@@ -53,7 +53,7 @@ LocalPlayer.CameraMaxZoomDistance = Options.MaxZoomSlider.Value
 
 PlayerGroupBox:AddDivider()
 
--- Auto Collect Pollen (Totalmente optimizado sin fugas de memoria)
+-- Auto Collect Pollen
 PlayerGroupBox:AddToggle("AutoToolCollect", { Text = "Auto Collect Pollen", Default = false })
 
 Toggles.AutoToolCollect:OnChanged(function(State)
@@ -69,7 +69,7 @@ end)
 
 PlayerGroupBox:AddDivider()
 
--- WalkSpeed y JumpPower
+-- Speed y Jump
 PlayerGroupBox:AddToggle("EnableSpeed", { Text = "Enable Speed", Default = false })
 PlayerGroupBox:AddSlider("WalkSpeedSlider", { Text = "WalkSpeed", Default = 95, Min = 16, Max = 300, Rounding = 0 })
 
@@ -116,63 +116,67 @@ Toggles.InfiniteJump:OnChanged(function(State)
 end)
 
 -- =================================================================
--- 2. SECCIÓN: COGMOWER TRACKER (ESP Gold Cogmower)
+-- 2. SECCIÓN: TARGET TRACKER (ESP Cogmower & Vicious Bee)
 -- =================================================================
-local ESPGroupBox = Tabs.Main:AddRightGroupbox("Cogmower Tracker")
+local ESPGroupBox = Tabs.Main:AddRightGroupbox("Target Tracker")
 
-local TARGET_NAME = "Gold Cogmower"
 local ActiveESP = {}
 
-ESPGroupBox:AddToggle("EspTrackerToggle", { Text = "Enable Cogmower ESP", Default = true }):AddColorPicker("ESPColor", {
+-- Controles ESP para Gold Cogmower
+ESPGroupBox:AddToggle("CogmowerEspToggle", { Text = "ESP Gold Cogmower", Default = true }):AddColorPicker("CogmowerColor", {
 	Default = Color3.fromRGB(255, 255, 0),
-	Title = "ESP Color",
+	Title = "Cogmower Color",
 })
 
+-- Controles ESP para Vicious Bee Spike
+ESPGroupBox:AddToggle("ViciousEspToggle", { Text = "ESP Vicious Bee Spike", Default = true }):AddColorPicker("ViciousColor", {
+	Default = Color3.fromRGB(0, 230, 255),
+	Title = "Vicious Bee Color",
+})
+
+ESPGroupBox:AddDivider()
 ESPGroupBox:AddToggle("DistanceToggle", { Text = "Enable Distance Filter", Default = true })
 ESPGroupBox:AddSlider("MaxDistanceSlider", { Text = "Max Distance", Default = 5000, Min = 100, Max = 100000, Rounding = 0 })
 ESPGroupBox:AddToggle("NameToggle", { Text = "Show Target Name", Default = true })
 
+-- Función de limpieza de elementos visuales
+local function removeESPInstance(target)
+	if ActiveESP[target] then
+		if ActiveESP[target].Highlight then ActiveESP[target].Highlight:Destroy() end
+		if ActiveESP[target].Billboard then ActiveESP[target].Billboard:Destroy() end
+		ActiveESP[target] = nil
+	end
+end
+
 local function clearAllESP()
-	for target, data in pairs(ActiveESP) do
-		if data.Highlight then data.Highlight:Destroy() end
-		if data.Billboard then data.Billboard:Destroy() end
+	for target, _ in pairs(ActiveESP) do
+		removeESPInstance(target)
 	end
 	table.clear(ActiveESP)
 end
 
-Toggles.EspTrackerToggle:OnChanged(function()
-	if not Toggles.EspTrackerToggle.Value then
-		clearAllESP()
-	end
-end)
+Toggles.CogmowerEspToggle:OnChanged(clearAllESP)
+Toggles.ViciousEspToggle:OnChanged(clearAllESP)
 
-Options.ESPColor:OnChanged(function(newColor)
-	for _, data in pairs(ActiveESP) do
-		if data.Highlight then data.Highlight.FillColor = newColor end
-		if data.Text then data.Text.TextColor3 = newColor end
-	end
-end)
-
-local function applyESP(target)
-	if not target or target.Name ~= TARGET_NAME or ActiveESP[target] then return end
+-- Función para aplicar ESP a cualquier objeto
+local function applyESP(target, displayName, defaultColor)
+	if not target or ActiveESP[target] then return end
 
 	local adorneePart = target:IsA("Model") and (target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart")) or target
 	if not adorneePart then return end
-
-	local pickedColor = Options.ESPColor.Value
 
 	-- Highlight (Chams)
 	local highlight = Instance.new("Highlight")
 	highlight.Name = "CamFollower_" .. target:GetDebugId()
 	highlight.Adornee = target
-	highlight.FillColor = pickedColor
+	highlight.FillColor = defaultColor
 	highlight.FillTransparency = 0.3
 	highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
 	highlight.OutlineTransparency = 0
 	highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 	highlight.Parent = camera
 
-	-- BillboardGui (ESP Text)
+	-- BillboardGui (Texto)
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "CamText_" .. target:GetDebugId()
 	billboard.Size = UDim2.new(0, 200, 0, 50)
@@ -183,7 +187,7 @@ local function applyESP(target)
 	local textLabel = Instance.new("TextLabel")
 	textLabel.Size = UDim2.new(1, 0, 1, 0)
 	textLabel.BackgroundTransparency = 1
-	textLabel.TextColor3 = pickedColor
+	textLabel.TextColor3 = defaultColor
 	textLabel.TextSize = 14
 	textLabel.Font = Enum.Font.RobotoMono
 	textLabel.TextStrokeTransparency = 0
@@ -195,50 +199,84 @@ local function applyESP(target)
 		Highlight = highlight,
 		Billboard = billboard,
 		Text = textLabel,
-		Part = adorneePart
+		Part = adorneePart,
+		DisplayName = displayName
 	}
 end
 
--- Motor de escaneo de Gold Cogmower (Control de frecuencia sin impacto en FPS)
+-- Motor de búsqueda de Vicious Bee Spike y Gold Cogmower
 task.spawn(function()
 	while isAlive do
-		if Toggles.EspTrackerToggle and Toggles.EspTrackerToggle.Value then
-			local char = LocalPlayer.Character
-			local root = char and char:FindFirstChild("HumanoidRootPart")
+		local char = LocalPlayer.Character
+		local root = char and char:FindFirstChild("HumanoidRootPart")
+		local currentTargets = {}
 
+		-- 1. Buscar Gold Cogmower en Workspace
+		if Toggles.CogmowerEspToggle and Toggles.CogmowerEspToggle.Value then
 			for _, child in ipairs(Workspace:GetChildren()) do
-				if child.Name == TARGET_NAME then
-					local adorneePart = child:IsA("Model") and (child.PrimaryPart or child:FindFirstChildWhichIsA("BasePart")) or child
-					if adorneePart then
-						local dist = root and (adorneePart.Position - root.Position).Magnitude or 0
-						local isInRange = not Toggles.DistanceToggle.Value or (dist <= Options.MaxDistanceSlider.Value)
-
-						if isInRange then
-							if not ActiveESP[child] then
-								applyESP(child)
-							else
-								local displayString = ""
-								if Toggles.NameToggle.Value then displayString = child.Name .. "\n" end
-								displayString = displayString .. math.floor(dist) .. "m"
-								ActiveESP[child].Text.Text = displayString
-							end
-						else
-							if ActiveESP[child] then
-								if ActiveESP[child].Highlight then ActiveESP[child].Highlight:Destroy() end
-								if ActiveESP[child].Billboard then ActiveESP[child].Billboard:Destroy() end
-								ActiveESP[child] = nil
-							end
-						end
-					end
+				if child.Name == "Gold Cogmower" then
+					currentTargets[child] = { Name = "Gold Cogmower", Color = Options.CogmowerColor.Value }
 				end
 			end
 		end
+
+		-- 2. Buscar Vicious Bee Spike (en workspace.RogueViciousBee o directamente en Workspace)
+		if Toggles.ViciousEspToggle and Toggles.ViciousEspToggle.Value then
+			local rogueFolder = Workspace:FindFirstChild("RogueViciousBee")
+			if rogueFolder then
+				for _, child in ipairs(rogueFolder:GetChildren()) do
+					if child.Name == "ViciousBeeDormantSpike" or child.Name:find("Spike") then
+						currentTargets[child] = { Name = "Vicious Bee Spike", Color = Options.ViciousColor.Value }
+					end
+				end
+			end
+			-- Búsqueda directa por si aparece fuera del folder
+			for _, child in ipairs(Workspace:GetChildren()) do
+				if child.Name == "ViciousBeeDormantSpike" then
+					currentTargets[child] = { Name = "Vicious Bee Spike", Color = Options.ViciousColor.Value }
+				end
+			end
+		end
+
+		-- Actualizar instancias y eliminar las que ya no existen
+		for target, info in pairs(currentTargets) do
+			local adorneePart = target:IsA("Model") and (target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart")) or target
+			if adorneePart then
+				local dist = root and (adorneePart.Position - root.Position).Magnitude or 0
+				local isInRange = not Toggles.DistanceToggle.Value or (dist <= Options.MaxDistanceSlider.Value)
+
+				if isInRange then
+					if not ActiveESP[target] then
+						applyESP(target, info.Name, info.Color)
+					else
+						-- Actualizar colores dinámicamente si cambian en la UI
+						ActiveESP[target].Highlight.FillColor = info.Color
+						ActiveESP[target].Text.TextColor3 = info.Color
+						
+						local displayString = ""
+						if Toggles.NameToggle.Value then displayString = info.Name .. "\n" end
+						displayString = displayString .. math.floor(dist) .. "m"
+						ActiveESP[target].Text.Text = displayString
+					end
+				else
+					removeESPInstance(target)
+				end
+			end
+		end
+
+		-- Limpieza de targets eliminados del juego
+		for target, _ in pairs(ActiveESP) do
+			if not currentTargets[target] or not target.Parent then
+				removeESPInstance(target)
+			end
+		end
+
 		task.wait(0.2)
 	end
 end)
 
 -- =================================================================
--- 3. CONFIGURACIÓN FINAL & DESTRUCCIÓN (Menu Settings)
+-- 3. CONFIGURACIÓN FINAL & DESTRUCCIÓN (UI Settings)
 -- =================================================================
 ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
@@ -248,17 +286,16 @@ SaveManager:SetFolder("D666Scripts/configs")
 
 local MenuGroup = Tabs["UI Settings"]:AddLeftGroupbox("Menu Settings")
 
--- Función de eliminación completa (Kill Script)
 MenuGroup:AddButton({ 
 	Text = "Kill / Destroy Script", 
 	Func = function() 
-		isAlive = false -- Detiene todos los bucles de fondo
+		isAlive = false
 		if jumpConnection then 
 			jumpConnection:Disconnect() 
 			jumpConnection = nil 
 		end
-		clearAllESP()   -- Borra elementos visuales activos
-		Library:Unload() -- Destruye la interfaz gráfica por completo
+		clearAllESP()
+		Library:Unload()
 	end 
 })
 
