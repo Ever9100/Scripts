@@ -116,22 +116,28 @@ Toggles.InfiniteJump:OnChanged(function(State)
 end)
 
 -- =================================================================
--- 2. SECCIÓN: TARGET TRACKER (ESP Cogmower & Vicious Bee)
+-- 2. SECCIÓN: TARGET TRACKER (ESP Cogmower, Vicious & Stickers)
 -- =================================================================
 local ESPGroupBox = Tabs.Main:AddRightGroupbox("Target Tracker")
 
 local ActiveESP = {}
 
--- Controles ESP para Gold Cogmower
+-- ESP Gold Cogmower
 ESPGroupBox:AddToggle("CogmowerEspToggle", { Text = "ESP Gold Cogmower", Default = true }):AddColorPicker("CogmowerColor", {
 	Default = Color3.fromRGB(255, 255, 0),
 	Title = "Cogmower Color",
 })
 
--- Controles ESP para Vicious Bee Spike
+-- ESP Vicious Bee Spike
 ESPGroupBox:AddToggle("ViciousEspToggle", { Text = "ESP Vicious Bee Spike", Default = true }):AddColorPicker("ViciousColor", {
 	Default = Color3.fromRGB(0, 230, 255),
 	Title = "Vicious Bee Color",
+})
+
+-- ESP Hidden Stickers
+ESPGroupBox:AddToggle("StickerEspToggle", { Text = "ESP Hidden Stickers", Default = true }):AddColorPicker("StickerColor", {
+	Default = Color3.fromRGB(255, 105, 180),
+	Title = "Sticker Color",
 })
 
 ESPGroupBox:AddDivider()
@@ -157,8 +163,9 @@ end
 
 Toggles.CogmowerEspToggle:OnChanged(clearAllESP)
 Toggles.ViciousEspToggle:OnChanged(clearAllESP)
+Toggles.StickerEspToggle:OnChanged(clearAllESP)
 
--- Función para aplicar ESP a cualquier objeto
+-- Función para aplicar ESP
 local function applyESP(target, displayName, defaultColor)
 	if not target or ActiveESP[target] then return end
 
@@ -204,14 +211,14 @@ local function applyESP(target, displayName, defaultColor)
 	}
 end
 
--- Motor de búsqueda de Vicious Bee Spike y Gold Cogmower
+-- Motor de búsqueda centralizado
 task.spawn(function()
 	while isAlive do
 		local char = LocalPlayer.Character
 		local root = char and char:FindFirstChild("HumanoidRootPart")
 		local currentTargets = {}
 
-		-- 1. Buscar Gold Cogmower en Workspace
+		-- 1. Gold Cogmower
 		if Toggles.CogmowerEspToggle and Toggles.CogmowerEspToggle.Value then
 			for _, child in ipairs(Workspace:GetChildren()) do
 				if child.Name == "Gold Cogmower" then
@@ -220,7 +227,7 @@ task.spawn(function()
 			end
 		end
 
-		-- 2. Buscar Vicious Bee Spike (en workspace.RogueViciousBee o directamente en Workspace)
+		-- 2. Vicious Bee Spike
 		if Toggles.ViciousEspToggle and Toggles.ViciousEspToggle.Value then
 			local rogueFolder = Workspace:FindFirstChild("RogueViciousBee")
 			if rogueFolder then
@@ -230,7 +237,6 @@ task.spawn(function()
 					end
 				end
 			end
-			-- Búsqueda directa por si aparece fuera del folder
 			for _, child in ipairs(Workspace:GetChildren()) do
 				if child.Name == "ViciousBeeDormantSpike" then
 					currentTargets[child] = { Name = "Vicious Bee Spike", Color = Options.ViciousColor.Value }
@@ -238,7 +244,18 @@ task.spawn(function()
 			end
 		end
 
-		-- Actualizar instancias y eliminar las que ya no existen
+		-- 3. Hidden Stickers (workspace.HiddenStickers)
+		if Toggles.StickerEspToggle and Toggles.StickerEspToggle.Value then
+			local stickerFolder = Workspace:FindFirstChild("HiddenStickers")
+			if stickerFolder then
+				for _, child in ipairs(stickerFolder:GetChildren()) do
+					local stickerName = (child.Name == "Hiddensticker" or child.Name == "HiddenSticker") and "Hidden Sticker" or child.Name
+					currentTargets[child] = { Name = stickerName, Color = Options.StickerColor.Value }
+				end
+			end
+		end
+
+		-- Actualizar instancias de ESP
 		for target, info in pairs(currentTargets) do
 			local adorneePart = target:IsA("Model") and (target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart")) or target
 			if adorneePart then
@@ -249,7 +266,6 @@ task.spawn(function()
 					if not ActiveESP[target] then
 						applyESP(target, info.Name, info.Color)
 					else
-						-- Actualizar colores dinámicamente si cambian en la UI
 						ActiveESP[target].Highlight.FillColor = info.Color
 						ActiveESP[target].Text.TextColor3 = info.Color
 						
@@ -264,7 +280,7 @@ task.spawn(function()
 			end
 		end
 
-		-- Limpieza de targets eliminados del juego
+		-- Limpieza de targets destruidos o desanimados
 		for target, _ in pairs(ActiveESP) do
 			if not currentTargets[target] or not target.Parent then
 				removeESPInstance(target)
