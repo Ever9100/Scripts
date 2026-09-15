@@ -1,15 +1,11 @@
--- =================================================================
---                   D666SCRIPTS - ESP & NOTIFIER
--- =================================================================
+
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
 local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
 
--- -----------------------------------------------------------------
--- CONFIGURACIÓN GLOBAL Y ESTADOS (ESP + NOTIFICACIONES)
--- -----------------------------------------------------------------
+
 local Config = {
 	BeanBugs = { ESP = true, Notif = true, Color = Color3.fromRGB(0, 255, 150), Icon = "🫘" },
 	GoldCogmower = { ESP = true, Notif = false, Color = Color3.fromRGB(255, 215, 0), Icon = "⚙️" },
@@ -38,25 +34,20 @@ local function SendNotifier(title, text, duration)
 	end)
 end
 
--- -----------------------------------------------------------------
--- NÚCLEO DE GENERACIÓN DE ESP
--- -----------------------------------------------------------------
+
 local function ApplyESP(category, instance, customName)
 	if not instance then return end
 	local settings = Config[category]
 	if not settings or not settings.ESP then return end
 
-	-- Evitar duplicados
 	if ActiveESP[category][instance] then return end
 
-	-- Determinar la parte primaria
 	local primaryPart = instance:IsA("BasePart") and instance 
 		or instance:FindFirstChild("BeanBody") 
 		or instance:FindFirstChildWhichIsA("BasePart", true)
 
 	if not primaryPart then return end
 
-	-- 1. Highlight
 	local highlight = Instance.new("Highlight")
 	highlight.Name = "D666_Highlight"
 	highlight.Adornee = instance
@@ -66,7 +57,6 @@ local function ApplyESP(category, instance, customName)
 	highlight.OutlineTransparency = 0
 	highlight.Parent = instance
 
-	-- 2. BillboardGui
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "D666_Tag"
 	billboard.Adornee = primaryPart
@@ -86,13 +76,11 @@ local function ApplyESP(category, instance, customName)
 	label.Text = string.format("%s %s", settings.Icon, customName or instance.Name)
 	label.Parent = billboard
 
-	-- Guardar referencias para limpieza rápida
 	ActiveESP[category][instance] = {
 		Highlight = highlight,
 		Billboard = billboard,
 	}
 
-	-- Notificación de aparición
 	if settings.Notif then
 		local char = LocalPlayer.Character
 		local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -104,7 +92,6 @@ local function ApplyESP(category, instance, customName)
 		SendNotifier("D666Scripts ESP", string.format("¡%s %s detectado!%s", settings.Icon, customName or instance.Name, distStr), 5)
 	end
 
-	-- Bucle de distancia y limpieza automática
 	task.spawn(function()
 		while instance and instance.Parent and ActiveESP[category][instance] do
 			if settings.ESP then
@@ -141,9 +128,7 @@ local function RefreshCategory(category)
 	end
 end
 
--- -----------------------------------------------------------------
--- ESCUCHADORES DE EVENTOS EN WORKSPACE
--- -----------------------------------------------------------------
+
 
 -- 1. Bean Bugs
 local beanFolder = Workspace:WaitForChild("BeanBugs", 5)
@@ -152,7 +137,8 @@ if beanFolder then
 		task.wait(0.1)
 		ApplyESP("BeanBugs", child, "Bean Bug")
 	end)
-	beanFolder.ChildRemoving:Connect(function(child)
+	-- CORREGIDO: ChildRemoved
+	beanFolder.ChildRemoved:Connect(function(child)
 		ClearESP("BeanBugs", child)
 	end)
 	for _, v in ipairs(beanFolder:GetChildren()) do ApplyESP("BeanBugs", v, "Bean Bug") end
@@ -165,13 +151,14 @@ if stickerFolder then
 		task.wait(0.1)
 		ApplyESP("HiddenStickers", child, "Sticker Oculto")
 	end)
-	stickerFolder.ChildRemoving:Connect(function(child)
+	-- CORREGIDO: ChildRemoved
+	stickerFolder.ChildRemoved:Connect(function(child)
 		ClearESP("HiddenStickers", child)
 	end)
 	for _, v in ipairs(stickerFolder:GetChildren()) do ApplyESP("HiddenStickers", v, "Sticker Oculto") end
 end
 
--- 3. Gold Cogmower & Vicious Spikes (Monsters / Workspace)
+-- 3. Gold Cogmower & Vicious Spikes
 local function CheckMonster(child)
 	task.wait(0.1)
 	local name = child.Name:lower()
@@ -192,14 +179,10 @@ for _, desc in ipairs(Workspace:GetDescendants()) do
 	CheckMonster(desc)
 end
 
--- -----------------------------------------------------------------
--- INTERFAZ GRÁFICA (UI) - D666SCRIPTS
--- -----------------------------------------------------------------
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "D666_ESP_UI"
 ScreenGui.ResetOnSpawn = false
 
--- Soporte para ejecutores (CoreGui) o PlayerGui
 if syn and syn.protect_gui then
 	syn.protect_gui(ScreenGui)
 	ScreenGui.Parent = CoreGui
@@ -221,21 +204,19 @@ Frame.Parent = ScreenGui
 local UICorner = Instance.new("UICorner", Frame)
 UICorner.CornerRadius = UDim.new(0, 8)
 
--- Título
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 35)
 Title.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.SourceSansBold
 Title.TextSize = 16
-Title.Text = "  🔥 D666Scripts - Panel de ESP & Notificaciones"
+Title.Text = "  🔥 D666Scripts - Panel de ESP"
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = Frame
 
 local TitleCorner = Instance.new("UICorner", Title)
 TitleCorner.CornerRadius = UDim.new(0, 8)
 
--- Creador de Filas (ESP ON/OFF + NOTIF ON/OFF)
 local YOffset = 45
 
 local function CreateESPRow(categoryKey, displayName)
@@ -251,7 +232,6 @@ local function CreateESPRow(categoryKey, displayName)
 	local RowCorner = Instance.new("UICorner", Container)
 	RowCorner.CornerRadius = UDim.new(0, 6)
 
-	-- Nombre del ESP
 	local Label = Instance.new("TextLabel")
 	Label.Size = UDim2.new(0.45, 0, 1, 0)
 	Label.Position = UDim2.new(0.03, 0, 0, 0)
@@ -263,7 +243,6 @@ local function CreateESPRow(categoryKey, displayName)
 	Label.Text = string.format("%s %s", rowSettings.Icon, displayName)
 	Label.Parent = Container
 
-	-- Botón Toggle ESP
 	local BtnESP = Instance.new("TextButton")
 	BtnESP.Size = UDim2.new(0.24, 0, 0.65, 0)
 	BtnESP.Position = UDim2.new(0.48, 0, 0.175, 0)
@@ -295,7 +274,6 @@ local function CreateESPRow(categoryKey, displayName)
 	end)
 	UpdateESPBtn()
 
-	-- Botón Toggle Notificación
 	local BtnNotif = Instance.new("TextButton")
 	BtnNotif.Size = UDim2.new(0.23, 0, 0.65, 0)
 	BtnNotif.Position = UDim2.new(0.74, 0, 0.175, 0)
@@ -330,7 +308,6 @@ local function CreateESPRow(categoryKey, displayName)
 	YOffset = YOffset + 48
 end
 
--- Generar filas para cada módulo
 CreateESPRow("BeanBugs", "Bean Bugs")
 CreateESPRow("GoldCogmower", "Gold Cogmower")
 CreateESPRow("ViciousSpikes", "Vicious Spikes")
