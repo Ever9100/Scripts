@@ -1,324 +1,339 @@
-local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
-local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
-local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
-local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
-
-local Options = Library.Options
-local Toggles = Library.Toggles
-
--- Servicios de Roblox
+-- =================================================================
+--                   D666SCRIPTS - ESP & NOTIFIER
+-- =================================================================
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
+local StarterGui = game:GetService("StarterGui")
+local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
-local camera = workspace.CurrentCamera
-local isAlive = true -- Variable de control global
 
--- Pre-creación del buffer optimizado para Auto Collect (Zero-GC)
-local Event = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Network"):WaitForChild("Events"):WaitForChild("ToolCollect")
-local rawBytes = { 66, 83, 82, 80, 1, 0, 0 }
-local cachedBuffer = buffer.create(#rawBytes)
-for i = 1, #rawBytes do
-    buffer.writeu8(cachedBuffer, i - 1, rawBytes[i])
-end
-
--- Ventana Principal
-local Window = Library:CreateWindow({
-	Title = "D666Scripts",
-	Footer = "Brainrot Hunter Premium",
-	Icon = "rbxassetid://17892890570",
-	NotifySide = "Right",
-	ShowCustomCursor = true,
-})
-
--- Pestañas
-local Tabs = {
-	Main = Window:AddTab("Main", "user"),
-	["UI Settings"] = Window:AddTab("UI Settings", "settings"),
+-- -----------------------------------------------------------------
+-- CONFIGURACIÓN GLOBAL Y ESTADOS (ESP + NOTIFICACIONES)
+-- -----------------------------------------------------------------
+local Config = {
+	BeanBugs = { ESP = true, Notif = true, Color = Color3.fromRGB(0, 255, 150), Icon = "🫘" },
+	GoldCogmower = { ESP = true, Notif = false, Color = Color3.fromRGB(255, 215, 0), Icon = "⚙️" },
+	ViciousSpikes = { ESP = true, Notif = true, Color = Color3.fromRGB(170, 0, 255), Icon = "🌵" },
+	HiddenStickers = { ESP = true, Notif = false, Color = Color3.fromRGB(255, 85, 85), Icon = "🏷️" },
 }
 
--- =================================================================
--- 1. SECCIÓN: JUGADOR & AUTO FARMING
--- =================================================================
-local PlayerGroupBox = Tabs.Main:AddLeftGroupbox("Player & Farming")
+-- Contenedor de objetos activos para limpiarlos dinámicamente
+local ActiveESP = {
+	BeanBugs = {},
+	GoldCogmower = {},
+	ViciousSpikes = {},
+	HiddenStickers = {},
+}
 
--- Zoom de Cámara
-PlayerGroupBox:AddSlider("MaxZoomSlider", { Text = "Max Camera Zoom", Default = 1000, Min = 128, Max = 5000, Rounding = 0 })
-Options.MaxZoomSlider:OnChanged(function()
-	LocalPlayer.CameraMaxZoomDistance = Options.MaxZoomSlider.Value
-end)
-LocalPlayer.CameraMaxZoomDistance = Options.MaxZoomSlider.Value
-
-PlayerGroupBox:AddDivider()
-
--- Auto Collect Pollen
-PlayerGroupBox:AddToggle("AutoToolCollect", { Text = "Auto Collect Pollen", Default = false })
-
-Toggles.AutoToolCollect:OnChanged(function(State)
-	if State then
-		task.spawn(function()
-			while Toggles.AutoToolCollect.Value and isAlive do
-				Event:FireServer(cachedBuffer)
-				task.wait(0.1)
-			end
-		end)
-	end
-end)
-
-PlayerGroupBox:AddDivider()
-
--- Speed y Jump
-PlayerGroupBox:AddToggle("EnableSpeed", { Text = "Enable Speed", Default = false })
-PlayerGroupBox:AddSlider("WalkSpeedSlider", { Text = "WalkSpeed", Default = 95, Min = 16, Max = 300, Rounding = 0 })
-
-PlayerGroupBox:AddToggle("EnableJump", { Text = "Enable JumpPower", Default = false })
-PlayerGroupBox:AddSlider("JumpPowerSlider", { Text = "JumpPower", Default = 100, Min = 50, Max = 400, Rounding = 0 })
-
-task.spawn(function()
-	while isAlive do
-		local char = LocalPlayer.Character
-		local hum = char and char:FindFirstChildOfClass("Humanoid")
-		if hum then
-			if Toggles.EnableSpeed and Toggles.EnableSpeed.Value then
-				hum.WalkSpeed = Options.WalkSpeedSlider.Value
-			end
-			if Toggles.EnableJump and Toggles.EnableJump.Value then
-				hum.UseJumpPower = true
-				hum.JumpPower = Options.JumpPowerSlider.Value
-			end
-		end
-		task.wait(0.2)
-	end
-end)
-
--- Infinite Jump
-local jumpConnection = nil
-PlayerGroupBox:AddToggle("InfiniteJump", { Text = "Infinite Jump", Default = false })
-
-Toggles.InfiniteJump:OnChanged(function(State)
-	if jumpConnection then
-		jumpConnection:Disconnect()
-		jumpConnection = nil
-	end
-
-	if State then
-		jumpConnection = UserInputService.JumpRequest:Connect(function()
-			if not isAlive then return end
-			local char = LocalPlayer.Character
-			local hum = char and char:FindFirstChildOfClass("Humanoid")
-			if hum then
-				hum:ChangeState(Enum.HumanoidStateType.Jumping)
-			end
-		end)
-	end
-end)
-
--- =================================================================
--- 2. SECCIÓN: TARGET TRACKER (ESP Cogmower, Vicious & Stickers)
--- =================================================================
-local ESPGroupBox = Tabs.Main:AddRightGroupbox("Target Tracker")
-
-local ActiveESP = {}
-
--- ESP Gold Cogmower
-ESPGroupBox:AddToggle("CogmowerEspToggle", { Text = "ESP Gold Cogmower", Default = true }):AddColorPicker("CogmowerColor", {
-	Default = Color3.fromRGB(255, 255, 0),
-	Title = "Cogmower Color",
-})
-
--- ESP Vicious Bee Spike
-ESPGroupBox:AddToggle("ViciousEspToggle", { Text = "ESP Vicious Bee Spike", Default = true }):AddColorPicker("ViciousColor", {
-	Default = Color3.fromRGB(0, 230, 255),
-	Title = "Vicious Bee Color",
-})
-
--- ESP Hidden Stickers
-ESPGroupBox:AddToggle("StickerEspToggle", { Text = "ESP Hidden Stickers", Default = true }):AddColorPicker("StickerColor", {
-	Default = Color3.fromRGB(255, 105, 180),
-	Title = "Sticker Color",
-})
-
-ESPGroupBox:AddDivider()
-ESPGroupBox:AddToggle("DistanceToggle", { Text = "Enable Distance Filter", Default = true })
-ESPGroupBox:AddSlider("MaxDistanceSlider", { Text = "Max Distance", Default = 5000, Min = 100, Max = 100000, Rounding = 0 })
-ESPGroupBox:AddToggle("NameToggle", { Text = "Show Target Name", Default = true })
-
--- Función de limpieza de elementos visuales
-local function removeESPInstance(target)
-	if ActiveESP[target] then
-		if ActiveESP[target].Highlight then ActiveESP[target].Highlight:Destroy() end
-		if ActiveESP[target].Billboard then ActiveESP[target].Billboard:Destroy() end
-		ActiveESP[target] = nil
-	end
+-- -----------------------------------------------------------------
+-- SISTEMA DE NOTIFICACIONES
+-- -----------------------------------------------------------------
+local function SendNotifier(title, text, duration)
+	pcall(function()
+		StarterGui:SetCore("SendNotification", {
+			Title = title,
+			Text = text,
+			Duration = duration or 4,
+		})
+	end)
 end
 
-local function clearAllESP()
-	for target, _ in pairs(ActiveESP) do
-		removeESPInstance(target)
-	end
-	table.clear(ActiveESP)
-end
+-- -----------------------------------------------------------------
+-- NÚCLEO DE GENERACIÓN DE ESP
+-- -----------------------------------------------------------------
+local function ApplyESP(category, instance, customName)
+	if not instance then return end
+	local settings = Config[category]
+	if not settings or not settings.ESP then return end
 
-Toggles.CogmowerEspToggle:OnChanged(clearAllESP)
-Toggles.ViciousEspToggle:OnChanged(clearAllESP)
-Toggles.StickerEspToggle:OnChanged(clearAllESP)
+	-- Evitar duplicados
+	if ActiveESP[category][instance] then return end
 
--- Función para aplicar ESP
-local function applyESP(target, displayName, defaultColor)
-	if not target or ActiveESP[target] then return end
+	-- Determinar la parte primaria
+	local primaryPart = instance:IsA("BasePart") and instance 
+		or instance:FindFirstChild("BeanBody") 
+		or instance:FindFirstChildWhichIsA("BasePart", true)
 
-	local adorneePart = target:IsA("Model") and (target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart")) or target
-	if not adorneePart then return end
+	if not primaryPart then return end
 
-	-- Highlight (Chams)
+	-- 1. Highlight
 	local highlight = Instance.new("Highlight")
-	highlight.Name = "CamFollower_" .. target:GetDebugId()
-	highlight.Adornee = target
-	highlight.FillColor = defaultColor
-	highlight.FillTransparency = 0.3
+	highlight.Name = "D666_Highlight"
+	highlight.Adornee = instance
+	highlight.FillColor = settings.Color
+	highlight.FillTransparency = 0.45
 	highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
 	highlight.OutlineTransparency = 0
-	highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-	highlight.Parent = camera
+	highlight.Parent = instance
 
-	-- BillboardGui (Texto)
+	-- 2. BillboardGui
 	local billboard = Instance.new("BillboardGui")
-	billboard.Name = "CamText_" .. target:GetDebugId()
-	billboard.Size = UDim2.new(0, 200, 0, 50)
-	billboard.StudsOffset = Vector3.new(0, 4.5, 0)
+	billboard.Name = "D666_Tag"
+	billboard.Adornee = primaryPart
+	billboard.Size = UDim2.new(0, 180, 0, 30)
+	billboard.StudsOffset = Vector3.new(0, 3, 0)
 	billboard.AlwaysOnTop = true
-	billboard.Adornee = adorneePart
+	billboard.Parent = instance
 
-	local textLabel = Instance.new("TextLabel")
-	textLabel.Size = UDim2.new(1, 0, 1, 0)
-	textLabel.BackgroundTransparency = 1
-	textLabel.TextColor3 = defaultColor
-	textLabel.TextSize = 14
-	textLabel.Font = Enum.Font.RobotoMono
-	textLabel.TextStrokeTransparency = 0
-	textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-	textLabel.Parent = billboard
-	billboard.Parent = camera
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, 0, 1, 0)
+	label.BackgroundTransparency = 1
+	label.TextColor3 = settings.Color
+	label.TextStrokeTransparency = 0
+	label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+	label.Font = Enum.Font.SourceSansBold
+	label.TextSize = 15
+	label.Text = string.format("%s %s", settings.Icon, customName or instance.Name)
+	label.Parent = billboard
 
-	ActiveESP[target] = {
+	-- Guardar referencias para limpieza rápida
+	ActiveESP[category][instance] = {
 		Highlight = highlight,
 		Billboard = billboard,
-		Text = textLabel,
-		Part = adorneePart,
-		DisplayName = displayName
 	}
-end
 
--- Motor de búsqueda centralizado
-task.spawn(function()
-	while isAlive do
+	-- Notificación de aparición
+	if settings.Notif then
 		local char = LocalPlayer.Character
 		local root = char and char:FindFirstChild("HumanoidRootPart")
-		local currentTargets = {}
-
-		-- 1. Gold Cogmower
-		if Toggles.CogmowerEspToggle and Toggles.CogmowerEspToggle.Value then
-			for _, child in ipairs(Workspace:GetChildren()) do
-				if child.Name == "Gold Cogmower" then
-					currentTargets[child] = { Name = "Gold Cogmower", Color = Options.CogmowerColor.Value }
-				end
-			end
+		local distStr = ""
+		if root then
+			local dist = math.floor((primaryPart.Position - root.Position).Magnitude)
+			distStr = string.format(" (%dm)", dist)
 		end
-
-		-- 2. Vicious Bee Spike
-		if Toggles.ViciousEspToggle and Toggles.ViciousEspToggle.Value then
-			local rogueFolder = Workspace:FindFirstChild("RogueViciousBee")
-			if rogueFolder then
-				for _, child in ipairs(rogueFolder:GetChildren()) do
-					if child.Name == "ViciousBeeDormantSpike" or child.Name:find("Spike") then
-						currentTargets[child] = { Name = "Vicious Bee Spike", Color = Options.ViciousColor.Value }
-					end
-				end
-			end
-			for _, child in ipairs(Workspace:GetChildren()) do
-				if child.Name == "ViciousBeeDormantSpike" then
-					currentTargets[child] = { Name = "Vicious Bee Spike", Color = Options.ViciousColor.Value }
-				end
-			end
-		end
-
-		-- 3. Hidden Stickers (workspace.HiddenStickers)
-		if Toggles.StickerEspToggle and Toggles.StickerEspToggle.Value then
-			local stickerFolder = Workspace:FindFirstChild("HiddenStickers")
-			if stickerFolder then
-				for _, child in ipairs(stickerFolder:GetChildren()) do
-					local stickerName = (child.Name == "Hiddensticker" or child.Name == "HiddenSticker") and "Hidden Sticker" or child.Name
-					currentTargets[child] = { Name = stickerName, Color = Options.StickerColor.Value }
-				end
-			end
-		end
-
-		-- Actualizar instancias de ESP
-		for target, info in pairs(currentTargets) do
-			local adorneePart = target:IsA("Model") and (target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart")) or target
-			if adorneePart then
-				local dist = root and (adorneePart.Position - root.Position).Magnitude or 0
-				local isInRange = not Toggles.DistanceToggle.Value or (dist <= Options.MaxDistanceSlider.Value)
-
-				if isInRange then
-					if not ActiveESP[target] then
-						applyESP(target, info.Name, info.Color)
-					else
-						ActiveESP[target].Highlight.FillColor = info.Color
-						ActiveESP[target].Text.TextColor3 = info.Color
-						
-						local displayString = ""
-						if Toggles.NameToggle.Value then displayString = info.Name .. "\n" end
-						displayString = displayString .. math.floor(dist) .. "m"
-						ActiveESP[target].Text.Text = displayString
-					end
-				else
-					removeESPInstance(target)
-				end
-			end
-		end
-
-		-- Limpieza de targets destruidos o desanimados
-		for target, _ in pairs(ActiveESP) do
-			if not currentTargets[target] or not target.Parent then
-				removeESPInstance(target)
-			end
-		end
-
-		task.wait(0.2)
+		SendNotifier("D666Scripts ESP", string.format("¡%s %s detectado!%s", settings.Icon, customName or instance.Name, distStr), 5)
 	end
+
+	-- Bucle de distancia y limpieza automática
+	task.spawn(function()
+		while instance and instance.Parent and ActiveESP[category][instance] do
+			if settings.ESP then
+				local char = LocalPlayer.Character
+				local root = char and char:FindFirstChild("HumanoidRootPart")
+				if root and primaryPart then
+					local dist = math.floor((primaryPart.Position - root.Position).Magnitude)
+					label.Text = string.format("%s %s [%dm]", settings.Icon, customName or instance.Name, dist)
+				end
+			else
+				highlight.Enabled = false
+				billboard.Enabled = false
+			end
+			task.wait(0.3)
+		end
+	end)
+end
+
+local function ClearESP(category, instance)
+	if ActiveESP[category][instance] then
+		if ActiveESP[category][instance].Highlight then
+			ActiveESP[category][instance].Highlight:Destroy()
+		end
+		if ActiveESP[category][instance].Billboard then
+			ActiveESP[category][instance].Billboard:Destroy()
+		end
+		ActiveESP[category][instance] = nil
+	end
+end
+
+local function RefreshCategory(category)
+	for instance, _ in pairs(ActiveESP[category]) do
+		ClearESP(category, instance)
+	end
+end
+
+-- -----------------------------------------------------------------
+-- ESCUCHADORES DE EVENTOS EN WORKSPACE
+-- -----------------------------------------------------------------
+
+-- 1. Bean Bugs
+local beanFolder = Workspace:WaitForChild("BeanBugs", 5)
+if beanFolder then
+	beanFolder.ChildAdded:Connect(function(child)
+		task.wait(0.1)
+		ApplyESP("BeanBugs", child, "Bean Bug")
+	end)
+	beanFolder.ChildRemoving:Connect(function(child)
+		ClearESP("BeanBugs", child)
+	end)
+	for _, v in ipairs(beanFolder:GetChildren()) do ApplyESP("BeanBugs", v, "Bean Bug") end
+end
+
+-- 2. Hidden Stickers
+local stickerFolder = Workspace:WaitForChild("HiddenStickers", 5)
+if stickerFolder then
+	stickerFolder.ChildAdded:Connect(function(child)
+		task.wait(0.1)
+		ApplyESP("HiddenStickers", child, "Sticker Oculto")
+	end)
+	stickerFolder.ChildRemoving:Connect(function(child)
+		ClearESP("HiddenStickers", child)
+	end)
+	for _, v in ipairs(stickerFolder:GetChildren()) do ApplyESP("HiddenStickers", v, "Sticker Oculto") end
+end
+
+-- 3. Gold Cogmower & Vicious Spikes (Monsters / Workspace)
+local function CheckMonster(child)
+	task.wait(0.1)
+	local name = child.Name:lower()
+	if name:find("cogmower") or name:find("goldcog") then
+		ApplyESP("GoldCogmower", child, "Gold Cogmower")
+	elseif name:find("vicious") or name:find("spike") then
+		ApplyESP("ViciousSpikes", child, "Espina Vicious")
+	end
+end
+
+Workspace.DescendantAdded:Connect(CheckMonster)
+Workspace.DescendantRemoving:Connect(function(child)
+	ClearESP("GoldCogmower", child)
+	ClearESP("ViciousSpikes", child)
 end)
 
--- =================================================================
--- 3. CONFIGURACIÓN FINAL & DESTRUCCIÓN (UI Settings)
--- =================================================================
-ThemeManager:SetLibrary(Library)
-SaveManager:SetLibrary(Library)
-SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
-ThemeManager:SetFolder("D666Scripts")
-SaveManager:SetFolder("D666Scripts/configs")
+for _, desc in ipairs(Workspace:GetDescendants()) do
+	CheckMonster(desc)
+end
 
-local MenuGroup = Tabs["UI Settings"]:AddLeftGroupbox("Menu Settings")
+-- -----------------------------------------------------------------
+-- INTERFAZ GRÁFICA (UI) - D666SCRIPTS
+-- -----------------------------------------------------------------
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "D666_ESP_UI"
+ScreenGui.ResetOnSpawn = false
 
-MenuGroup:AddButton({ 
-	Text = "Kill / Destroy Script", 
-	Func = function() 
-		isAlive = false
-		if jumpConnection then 
-			jumpConnection:Disconnect() 
-			jumpConnection = nil 
+-- Soporte para ejecutores (CoreGui) o PlayerGui
+if syn and syn.protect_gui then
+	syn.protect_gui(ScreenGui)
+	ScreenGui.Parent = CoreGui
+elseif gethui then
+	ScreenGui.Parent = gethui()
+else
+	ScreenGui.Parent = CoreGui:FindFirstChild("RobloxGui") or LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 320, 0, 260)
+Frame.Position = UDim2.new(0.05, 0, 0.3, 0)
+Frame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+Frame.BorderSizePixel = 0
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner", Frame)
+UICorner.CornerRadius = UDim.new(0, 8)
+
+-- Título
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 16
+Title.Text = "  🔥 D666Scripts - Panel de ESP & Notificaciones"
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = Frame
+
+local TitleCorner = Instance.new("UICorner", Title)
+TitleCorner.CornerRadius = UDim.new(0, 8)
+
+-- Creador de Filas (ESP ON/OFF + NOTIF ON/OFF)
+local YOffset = 45
+
+local function CreateESPRow(categoryKey, displayName)
+	local rowSettings = Config[categoryKey]
+
+	local Container = Instance.new("Frame")
+	Container.Size = UDim2.new(0.92, 0, 0, 42)
+	Container.Position = UDim2.new(0.04, 0, 0, YOffset)
+	Container.BackgroundColor3 = Color3.fromRGB(32, 32, 40)
+	Container.BorderSizePixel = 0
+	Container.Parent = Frame
+
+	local RowCorner = Instance.new("UICorner", Container)
+	RowCorner.CornerRadius = UDim.new(0, 6)
+
+	-- Nombre del ESP
+	local Label = Instance.new("TextLabel")
+	Label.Size = UDim2.new(0.45, 0, 1, 0)
+	Label.Position = UDim2.new(0.03, 0, 0, 0)
+	Label.BackgroundTransparency = 1
+	Label.TextColor3 = Color3.fromRGB(230, 230, 230)
+	Label.Font = Enum.Font.SourceSansSemiBold
+	Label.TextSize = 14
+	Label.TextXAlignment = Enum.TextXAlignment.Left
+	Label.Text = string.format("%s %s", rowSettings.Icon, displayName)
+	Label.Parent = Container
+
+	-- Botón Toggle ESP
+	local BtnESP = Instance.new("TextButton")
+	BtnESP.Size = UDim2.new(0.24, 0, 0.65, 0)
+	BtnESP.Position = UDim2.new(0.48, 0, 0.175, 0)
+	BtnESP.Font = Enum.Font.SourceSansBold
+	BtnESP.TextSize = 12
+	BtnESP.Parent = Container
+
+	local BtnESPCorner = Instance.new("UICorner", BtnESP)
+	BtnESPCorner.CornerRadius = UDim.new(0, 4)
+
+	local function UpdateESPBtn()
+		if rowSettings.ESP then
+			BtnESP.Text = "ESP: ON"
+			BtnESP.BackgroundColor3 = Color3.fromRGB(46, 139, 87)
+			BtnESP.TextColor3 = Color3.fromRGB(255, 255, 255)
+		else
+			BtnESP.Text = "ESP: OFF"
+			BtnESP.BackgroundColor3 = Color3.fromRGB(80, 80, 90)
+			BtnESP.TextColor3 = Color3.fromRGB(180, 180, 180)
 		end
-		clearAllESP()
-		Library:Unload()
-	end 
-})
+	end
 
-MenuGroup:AddLabel("Menu Bind"):AddKeyPicker("MenuKeybind", { Default = "LeftShift", NoUI = true, Text = "Menu Keybind" })
+	BtnESP.MouseButton1Click:Connect(function()
+		rowSettings.ESP = not rowSettings.ESP
+		UpdateESPBtn()
+		if not rowSettings.ESP then
+			RefreshCategory(categoryKey)
+		end
+	end)
+	UpdateESPBtn()
 
-Library.ToggleKeybind = Options.MenuKeybind 
+	-- Botón Toggle Notificación
+	local BtnNotif = Instance.new("TextButton")
+	BtnNotif.Size = UDim2.new(0.23, 0, 0.65, 0)
+	BtnNotif.Position = UDim2.new(0.74, 0, 0.175, 0)
+	BtnNotif.Font = Enum.Font.SourceSansBold
+	BtnNotif.TextSize = 12
+	BtnNotif.Parent = Container
 
-SaveManager:BuildConfigSection(Tabs["UI Settings"])
-ThemeManager:ApplyToTab(Tabs["UI Settings"])
-SaveManager:LoadAutoloadConfig()
+	local BtnNotifCorner = Instance.new("UICorner", BtnNotif)
+	BtnNotifCorner.CornerRadius = UDim.new(0, 4)
+
+	local function UpdateNotifBtn()
+		if rowSettings.Notif then
+			BtnNotif.Text = "🔔 ON"
+			BtnNotif.BackgroundColor3 = Color3.fromRGB(218, 112, 214)
+			BtnNotif.TextColor3 = Color3.fromRGB(255, 255, 255)
+		else
+			BtnNotif.Text = "🔕 OFF"
+			BtnNotif.BackgroundColor3 = Color3.fromRGB(80, 80, 90)
+			BtnNotif.TextColor3 = Color3.fromRGB(180, 180, 180)
+		end
+	end
+
+	BtnNotif.MouseButton1Click:Connect(function()
+		rowSettings.Notif = not rowSettings.Notif
+		UpdateNotifBtn()
+		if rowSettings.Notif then
+			SendNotifier("D666Notifs", string.format("Notificaciones activadas para %s", displayName), 2)
+		end
+	end)
+	UpdateNotifBtn()
+
+	YOffset = YOffset + 48
+end
+
+-- Generar filas para cada módulo
+CreateESPRow("BeanBugs", "Bean Bugs")
+CreateESPRow("GoldCogmower", "Gold Cogmower")
+CreateESPRow("ViciousSpikes", "Vicious Spikes")
+CreateESPRow("HiddenStickers", "Stickers")
+
+SendNotifier("D666Scripts Loaded", "Panel de ESP y Notificaciones iniciado correctamente.", 4)
