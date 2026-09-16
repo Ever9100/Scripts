@@ -124,7 +124,7 @@ local ESPGroupBox = Tabs.Main:AddRightGroupbox("Target Tracker")
 local ActiveESP = {}
 local NotifiedTargets = {}
 
--- Función auxiliar de notificaciones (Compatibilidad Obsidian + Roblox)
+-- Función auxiliar de notificaciones
 local function sendNotification(title, text)
 	pcall(function()
 		if Library and Library.Notify then
@@ -160,12 +160,19 @@ ESPGroupBox:AddToggle("StickerEspToggle", { Text = "ESP Hidden Stickers", Defaul
 })
 ESPGroupBox:AddToggle("StickerNotifToggle", { Text = "🔔 Sticker Notifs", Default = false })
 
--- 4. ESP Bean Bugs (NUEVO)
+-- 4. ESP Bean Bugs
 ESPGroupBox:AddToggle("BeanBugsEspToggle", { Text = "ESP Bean Bugs", Default = true }):AddColorPicker("BeanBugsColor", {
 	Default = Color3.fromRGB(0, 255, 150),
 	Title = "Bean Bugs Color",
 })
 ESPGroupBox:AddToggle("BeanBugsNotifToggle", { Text = "🔔 Bean Bugs Notifs", Default = true })
+
+-- 5. ESP Windy Bee (NUEVO)
+ESPGroupBox:AddToggle("WindyBeeEspToggle", { Text = "ESP Windy Bee", Default = true }):AddColorPicker("WindyBeeColor", {
+	Default = Color3.fromRGB(173, 216, 230), -- Azul Claro / Celeste
+	Title = "Windy Bee Color",
+})
+ESPGroupBox:AddToggle("WindyBeeNotifToggle", { Text = "🔔 Windy Bee Notifs", Default = true })
 
 ESPGroupBox:AddDivider()
 ESPGroupBox:AddToggle("DistanceToggle", { Text = "Enable Distance Filter", Default = true })
@@ -192,6 +199,7 @@ Toggles.CogmowerEspToggle:OnChanged(clearAllESP)
 Toggles.ViciousEspToggle:OnChanged(clearAllESP)
 Toggles.StickerEspToggle:OnChanged(clearAllESP)
 Toggles.BeanBugsEspToggle:OnChanged(clearAllESP)
+Toggles.WindyBeeEspToggle:OnChanged(clearAllESP) -- Vinculado a limpieza
 
 -- Función para aplicar ESP
 local function applyESP(target, displayName, defaultColor)
@@ -284,7 +292,7 @@ task.spawn(function()
 			end
 		end
 
-		-- 3. Hidden Stickers (workspace.HiddenStickers)
+		-- 3. Hidden Stickers
 		if Toggles.StickerEspToggle and Toggles.StickerEspToggle.Value then
 			local stickerFolder = Workspace:FindFirstChild("HiddenStickers")
 			if stickerFolder then
@@ -299,7 +307,7 @@ task.spawn(function()
 			end
 		end
 
-		-- 4. Bean Bugs (workspace.BeanBugs)
+		-- 4. Bean Bugs
 		if Toggles.BeanBugsEspToggle and Toggles.BeanBugsEspToggle.Value then
 			local beanFolder = Workspace:FindFirstChild("BeanBugs")
 			if beanFolder then
@@ -310,6 +318,18 @@ task.spawn(function()
 						Notify = Toggles.BeanBugsNotifToggle and Toggles.BeanBugsNotifToggle.Value
 					}
 				end
+			end
+		end
+
+		-- 5. Windy Bee (NUEVO)
+		if Toggles.WindyBeeEspToggle and Toggles.WindyBeeEspToggle.Value then
+			local windy = Workspace:FindFirstChild("Windy Bee")
+			if windy then
+				currentTargets[windy] = { 
+					Name = "Windy Bee", 
+					Color = Options.WindyBeeColor.Value,
+					Notify = Toggles.WindyBeeNotifToggle and Toggles.WindyBeeNotifToggle.Value
+				}
 			end
 		end
 
@@ -324,7 +344,7 @@ task.spawn(function()
 					-- Disparar notificación solo 1 vez por objeto detectado
 					if info.Notify and not NotifiedTargets[target] then
 						NotifiedTargets[target] = true
-						sendNotification("D666Scripts ESP", string.format("¡%s detectado a %dm!", info.Name, math.floor(dist)))
+						sendNotification("D666Scripts ESP", string.format("¡%s detectada a %dm!", info.Name, math.floor(dist)))
 					end
 
 					if not ActiveESP[target] then
