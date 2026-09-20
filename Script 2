@@ -6,7 +6,6 @@ local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 local Options = Library.Options
 local Toggles = Library.Toggles
 
--- Servicios de Roblox
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -15,9 +14,8 @@ local StarterGui = game:GetService("StarterGui")
 
 local LocalPlayer = Players.LocalPlayer
 local camera = workspace.CurrentCamera
-local isAlive = true -- Variable de control global
+local isAlive = true 
 
--- Pre-creación del buffer optimizado para Auto Collect (Zero-GC)
 local Event = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Network"):WaitForChild("Events"):WaitForChild("ToolCollect")
 local rawBytes = { 66, 83, 82, 80, 1, 0, 0 }
 local cachedBuffer = buffer.create(#rawBytes)
@@ -25,7 +23,6 @@ for i = 1, #rawBytes do
     buffer.writeu8(cachedBuffer, i - 1, rawBytes[i])
 end
 
--- Ventana Principal
 local Window = Library:CreateWindow({
 	Title = "D666Scripts",
 	Footer = "Bss",
@@ -34,18 +31,13 @@ local Window = Library:CreateWindow({
 	ShowCustomCursor = true,
 })
 
--- Pestañas
 local Tabs = {
 	Main = Window:AddTab("Main", "user"),
 	["UI Settings"] = Window:AddTab("UI Settings", "settings"),
 }
 
--- =================================================================
--- 1. SECCIÓN: JUGADOR & AUTO FARMING
--- =================================================================
 local PlayerGroupBox = Tabs.Main:AddLeftGroupbox("Player & Farming")
 
--- Zoom de Cámara
 PlayerGroupBox:AddSlider("MaxZoomSlider", { Text = "Max Camera Zoom", Default = 1000, Min = 128, Max = 5000, Rounding = 0 })
 Options.MaxZoomSlider:OnChanged(function()
 	LocalPlayer.CameraMaxZoomDistance = Options.MaxZoomSlider.Value
@@ -54,7 +46,6 @@ LocalPlayer.CameraMaxZoomDistance = Options.MaxZoomSlider.Value
 
 PlayerGroupBox:AddDivider()
 
--- Auto Collect Pollen
 PlayerGroupBox:AddToggle("AutoToolCollect", { Text = "Auto Collect Pollen", Default = false })
 
 Toggles.AutoToolCollect:OnChanged(function(State)
@@ -70,7 +61,6 @@ end)
 
 PlayerGroupBox:AddDivider()
 
--- Speed y Jump
 PlayerGroupBox:AddToggle("EnableSpeed", { Text = "Enable Speed", Default = false })
 PlayerGroupBox:AddSlider("WalkSpeedSlider", { Text = "WalkSpeed", Default = 95, Min = 16, Max = 300, Rounding = 0 })
 
@@ -94,7 +84,6 @@ task.spawn(function()
 	end
 end)
 
--- Infinite Jump
 local jumpConnection = nil
 PlayerGroupBox:AddToggle("InfiniteJump", { Text = "Infinite Jump", Default = false })
 
@@ -116,62 +105,71 @@ Toggles.InfiniteJump:OnChanged(function(State)
 	end
 end)
 
--- =================================================================
--- 2. SECCIÓN: TARGET TRACKER (ESP & NOTIFICACIONES)
--- =================================================================
+local MiscGroupBox = Tabs.Main:AddLeftGroupbox("Misc Utilities")
+
+MiscGroupBox:AddButton({
+	Text = "Fix/Scale Hive Presets UI",
+	Func = function()
+		local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+		for _, desc in ipairs(playerGui:GetDescendants()) do
+			if desc:IsA("TextLabel") and (desc.Text:find("Hive Presets") or desc.Text == "Hive Presets") then
+				local rootFrame = desc
+				while rootFrame.Parent and not rootFrame.Parent:IsA("ScreenGui") do
+					rootFrame = rootFrame.Parent
+				end
+				
+				if rootFrame:IsA("Frame") then
+					local uiScale = rootFrame:FindFirstChildWhichIsA("UIScale")
+					if not uiScale then
+						uiScale = Instance.new("UIScale")
+						uiScale.Parent = rootFrame
+					end
+					
+					uiScale.Scale = 0.65 
+					rootFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+					rootFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+					
+					Library:Notify("Hive Presets UI successfully scaled.", 3)
+					break
+				end
+			end
+		end
+	end
+})
+
 local ESPGroupBox = Tabs.Main:AddRightGroupbox("Target Tracker")
 
 local ActiveESP = {}
 local NotifiedTargets = {}
 
--- Función auxiliar de notificaciones
 local function sendNotification(title, text)
 	pcall(function()
 		if Library and Library.Notify then
 			Library:Notify(title .. ": " .. text, 4)
 		else
-			StarterGui:SetCore("SendNotification", {
-				Title = title,
-				Text = text,
-				Duration = 4
-			})
+			StarterGui:SetCore("SendNotification", { Title = title, Text = text, Duration = 4 })
 		end
 	end)
 end
 
--- 1. ESP Gold Cogmower
 ESPGroupBox:AddToggle("CogmowerEspToggle", { Text = "ESP Gold Cogmower", Default = true }):AddColorPicker("CogmowerColor", {
-	Default = Color3.fromRGB(255, 255, 0),
-	Title = "Cogmower Color",
-})
+	Default = Color3.fromRGB(255, 255, 0), Title = "Cogmower Color" })
 ESPGroupBox:AddToggle("CogmowerNotifToggle", { Text = "🔔 Cogmower Notifs", Default = false })
 
--- 2. ESP Vicious Bee Spike
 ESPGroupBox:AddToggle("ViciousEspToggle", { Text = "ESP Vicious Bee Spike", Default = true }):AddColorPicker("ViciousColor", {
-	Default = Color3.fromRGB(0, 230, 255),
-	Title = "Vicious Bee Color",
-})
+	Default = Color3.fromRGB(0, 230, 255), Title = "Vicious Bee Color" })
 ESPGroupBox:AddToggle("ViciousNotifToggle", { Text = "🔔 Vicious Notifs", Default = true })
 
--- 3. ESP Hidden Stickers
 ESPGroupBox:AddToggle("StickerEspToggle", { Text = "ESP Hidden Stickers", Default = true }):AddColorPicker("StickerColor", {
-	Default = Color3.fromRGB(255, 105, 180),
-	Title = "Sticker Color",
-})
+	Default = Color3.fromRGB(255, 105, 180), Title = "Sticker Color" })
 ESPGroupBox:AddToggle("StickerNotifToggle", { Text = "🔔 Sticker Notifs", Default = false })
 
--- 4. ESP Bean Bugs
 ESPGroupBox:AddToggle("BeanBugsEspToggle", { Text = "ESP Bean Bugs", Default = true }):AddColorPicker("BeanBugsColor", {
-	Default = Color3.fromRGB(0, 255, 150),
-	Title = "Bean Bugs Color",
-})
+	Default = Color3.fromRGB(0, 255, 150), Title = "Bean Bugs Color" })
 ESPGroupBox:AddToggle("BeanBugsNotifToggle", { Text = "🔔 Bean Bugs Notifs", Default = true })
 
--- 5. ESP Windy Bee (NUEVO)
 ESPGroupBox:AddToggle("WindyBeeEspToggle", { Text = "ESP Windy Bee", Default = true }):AddColorPicker("WindyBeeColor", {
-	Default = Color3.fromRGB(173, 216, 230), -- Azul Claro / Celeste
-	Title = "Windy Bee Color",
-})
+	Default = Color3.fromRGB(173, 216, 230), Title = "Windy Bee Color" })
 ESPGroupBox:AddToggle("WindyBeeNotifToggle", { Text = "🔔 Windy Bee Notifs", Default = true })
 
 ESPGroupBox:AddDivider()
@@ -179,7 +177,6 @@ ESPGroupBox:AddToggle("DistanceToggle", { Text = "Enable Distance Filter", Defau
 ESPGroupBox:AddSlider("MaxDistanceSlider", { Text = "Max Distance", Default = 5000, Min = 100, Max = 100000, Rounding = 0 })
 ESPGroupBox:AddToggle("NameToggle", { Text = "Show Target Name", Default = true })
 
--- Función de limpieza de elementos visuales
 local function removeESPInstance(target)
 	if ActiveESP[target] then
 		if ActiveESP[target].Highlight then ActiveESP[target].Highlight:Destroy() end
@@ -189,9 +186,7 @@ local function removeESPInstance(target)
 end
 
 local function clearAllESP()
-	for target, _ in pairs(ActiveESP) do
-		removeESPInstance(target)
-	end
+	for target, _ in pairs(ActiveESP) do removeESPInstance(target) end
 	table.clear(ActiveESP)
 end
 
@@ -199,16 +194,14 @@ Toggles.CogmowerEspToggle:OnChanged(clearAllESP)
 Toggles.ViciousEspToggle:OnChanged(clearAllESP)
 Toggles.StickerEspToggle:OnChanged(clearAllESP)
 Toggles.BeanBugsEspToggle:OnChanged(clearAllESP)
-Toggles.WindyBeeEspToggle:OnChanged(clearAllESP) -- Vinculado a limpieza
+Toggles.WindyBeeEspToggle:OnChanged(clearAllESP)
 
--- Función para aplicar ESP
 local function applyESP(target, displayName, defaultColor)
 	if not target or ActiveESP[target] then return end
 
 	local adorneePart = target:IsA("Model") and (target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart")) or target
 	if not adorneePart then return end
 
-	-- Highlight (Chams)
 	local highlight = Instance.new("Highlight")
 	highlight.Name = "CamFollower_" .. target:GetDebugId()
 	highlight.Adornee = target
@@ -219,7 +212,6 @@ local function applyESP(target, displayName, defaultColor)
 	highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 	highlight.Parent = camera
 
-	-- BillboardGui (Texto)
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "CamText_" .. target:GetDebugId()
 	billboard.Size = UDim2.new(0, 200, 0, 50)
@@ -238,102 +230,65 @@ local function applyESP(target, displayName, defaultColor)
 	textLabel.Parent = billboard
 	billboard.Parent = camera
 
-	ActiveESP[target] = {
-		Highlight = highlight,
-		Billboard = billboard,
-		Text = textLabel,
-		Part = adorneePart,
-		DisplayName = displayName
-	}
+	ActiveESP[target] = { Highlight = highlight, Billboard = billboard, Text = textLabel, Part = adorneePart, DisplayName = displayName }
 end
 
--- Motor de búsqueda centralizado
 task.spawn(function()
 	while isAlive do
 		local char = LocalPlayer.Character
 		local root = char and char:FindFirstChild("HumanoidRootPart")
 		local currentTargets = {}
 
-		-- 1. Gold Cogmower
 		if Toggles.CogmowerEspToggle and Toggles.CogmowerEspToggle.Value then
 			for _, child in ipairs(Workspace:GetChildren()) do
 				if child.Name == "Gold Cogmower" then
-					currentTargets[child] = { 
-						Name = "Gold Cogmower", 
-						Color = Options.CogmowerColor.Value,
-						Notify = Toggles.CogmowerNotifToggle and Toggles.CogmowerNotifToggle.Value
-					}
+					currentTargets[child] = { Name = "Gold Cogmower", Color = Options.CogmowerColor.Value, Notify = Toggles.CogmowerNotifToggle and Toggles.CogmowerNotifToggle.Value }
 				end
 			end
 		end
 
-		-- 2. Vicious Bee Spike
 		if Toggles.ViciousEspToggle and Toggles.ViciousEspToggle.Value then
 			local rogueFolder = Workspace:FindFirstChild("RogueViciousBee")
 			if rogueFolder then
 				for _, child in ipairs(rogueFolder:GetChildren()) do
 					if child.Name == "ViciousBeeDormantSpike" or child.Name:find("Spike") then
-						currentTargets[child] = { 
-							Name = "Vicious Bee Spike", 
-							Color = Options.ViciousColor.Value,
-							Notify = Toggles.ViciousNotifToggle and Toggles.ViciousNotifToggle.Value
-						}
+						currentTargets[child] = { Name = "Vicious Bee Spike", Color = Options.ViciousColor.Value, Notify = Toggles.ViciousNotifToggle and Toggles.ViciousNotifToggle.Value }
 					end
 				end
 			end
 			for _, child in ipairs(Workspace:GetChildren()) do
 				if child.Name == "ViciousBeeDormantSpike" then
-					currentTargets[child] = { 
-						Name = "Vicious Bee Spike", 
-						Color = Options.ViciousColor.Value,
-						Notify = Toggles.ViciousNotifToggle and Toggles.ViciousNotifToggle.Value
-					}
+					currentTargets[child] = { Name = "Vicious Bee Spike", Color = Options.ViciousColor.Value, Notify = Toggles.ViciousNotifToggle and Toggles.ViciousNotifToggle.Value }
 				end
 			end
 		end
 
-		-- 3. Hidden Stickers
 		if Toggles.StickerEspToggle and Toggles.StickerEspToggle.Value then
 			local stickerFolder = Workspace:FindFirstChild("HiddenStickers")
 			if stickerFolder then
 				for _, child in ipairs(stickerFolder:GetChildren()) do
 					local stickerName = (child.Name == "Hiddensticker" or child.Name == "HiddenSticker") and "Hidden Sticker" or child.Name
-					currentTargets[child] = { 
-						Name = stickerName, 
-						Color = Options.StickerColor.Value,
-						Notify = Toggles.StickerNotifToggle and Toggles.StickerNotifToggle.Value
-					}
+					currentTargets[child] = { Name = stickerName, Color = Options.StickerColor.Value, Notify = Toggles.StickerNotifToggle and Toggles.StickerNotifToggle.Value }
 				end
 			end
 		end
 
-		-- 4. Bean Bugs
 		if Toggles.BeanBugsEspToggle and Toggles.BeanBugsEspToggle.Value then
 			local beanFolder = Workspace:FindFirstChild("BeanBugs")
 			if beanFolder then
 				for _, child in ipairs(beanFolder:GetChildren()) do
-					currentTargets[child] = { 
-						Name = "Bean Bug", 
-						Color = Options.BeanBugsColor.Value,
-						Notify = Toggles.BeanBugsNotifToggle and Toggles.BeanBugsNotifToggle.Value
-					}
+					currentTargets[child] = { Name = "Bean Bug", Color = Options.BeanBugsColor.Value, Notify = Toggles.BeanBugsNotifToggle and Toggles.BeanBugsNotifToggle.Value }
 				end
 			end
 		end
 
-		-- 5. Windy Bee (NUEVO)
 		if Toggles.WindyBeeEspToggle and Toggles.WindyBeeEspToggle.Value then
 			local windy = Workspace:FindFirstChild("Windy Bee")
 			if windy then
-				currentTargets[windy] = { 
-					Name = "Windy Bee", 
-					Color = Options.WindyBeeColor.Value,
-					Notify = Toggles.WindyBeeNotifToggle and Toggles.WindyBeeNotifToggle.Value
-				}
+				currentTargets[windy] = { Name = "Windy Bee", Color = Options.WindyBeeColor.Value, Notify = Toggles.WindyBeeNotifToggle and Toggles.WindyBeeNotifToggle.Value }
 			end
 		end
 
-		-- Actualizar instancias de ESP y Notificaciones
 		for target, info in pairs(currentTargets) do
 			local adorneePart = target:IsA("Model") and (target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart")) or target
 			if adorneePart then
@@ -341,10 +296,9 @@ task.spawn(function()
 				local isInRange = not Toggles.DistanceToggle.Value or (dist <= Options.MaxDistanceSlider.Value)
 
 				if isInRange then
-					-- Disparar notificación solo 1 vez por objeto detectado
 					if info.Notify and not NotifiedTargets[target] then
 						NotifiedTargets[target] = true
-						sendNotification("D666Scripts ESP", string.format("¡%s detectada a %dm!", info.Name, math.floor(dist)))
+						sendNotification("D666Scripts ESP", string.format("%s detected at %dm!", info.Name, math.floor(dist)))
 					end
 
 					if not ActiveESP[target] then
@@ -364,26 +318,18 @@ task.spawn(function()
 			end
 		end
 
-		-- Limpieza de targets destruidos o desanimados
 		for target, _ in pairs(ActiveESP) do
-			if not currentTargets[target] or not target.Parent then
-				removeESPInstance(target)
-			end
+			if not currentTargets[target] or not target.Parent then removeESPInstance(target) end
 		end
 
 		for target, _ in pairs(NotifiedTargets) do
-			if not currentTargets[target] or not target.Parent then
-				NotifiedTargets[target] = nil
-			end
+			if not currentTargets[target] or not target.Parent then NotifiedTargets[target] = nil end
 		end
 
 		task.wait(0.2)
 	end
 end)
 
--- =================================================================
--- 3. CONFIGURACIÓN FINAL & DESTRUCCIÓN (UI Settings)
--- =================================================================
 ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
 SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
@@ -406,9 +352,15 @@ MenuGroup:AddButton({
 })
 
 MenuGroup:AddLabel("Menu Bind"):AddKeyPicker("MenuKeybind", { Default = "LeftShift", NoUI = true, Text = "Menu Keybind" })
-
 Library.ToggleKeybind = Options.MenuKeybind 
 
 SaveManager:BuildConfigSection(Tabs["UI Settings"])
 ThemeManager:ApplyToTab(Tabs["UI Settings"])
+
+task.spawn(function()
+	if Options.AccentColor then
+		Options.AccentColor:SetValueRGB(Color3.fromRGB(255, 0, 0))
+	end
+end)
+
 SaveManager:LoadAutoloadConfig()
