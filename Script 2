@@ -28,7 +28,7 @@ end
 -- Ventana Principal
 local Window = Library:CreateWindow({
 	Title = "D666Scripts",
-	Footer = "Brainrot Hunter Premium",
+	Footer = "Bss",
 	Icon = "rbxassetid://17892890570",
 	NotifySide = "Right",
 	ShowCustomCursor = true,
