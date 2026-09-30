@@ -1,0 +1,171 @@
+-- Cargar Librería y Complementos
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+
+local Options = Library.Options
+local Toggles = Library.Toggles
+
+-- Crear Ventana Principal
+local Window = Library:CreateWindow({
+	Title = "D666Scripts",
+	Footer = "Versión Anti-Detect",
+	Icon = "rbxassetid://17892890570",
+	NotifySide = "Right",
+	ShowCustomCursor = true,
+})
+
+-- Pestañas
+local Tabs = {
+	Main = Window:AddTab("Principal", "swords"),
+	["UI Settings"] = Window:AddTab("Ajustes UI", "settings"),
+}
+
+-- Sección de Auto QTE
+local QTEGroup = Tabs.Main:AddGroupbox({
+	Side = "Left",
+	Name = "Auto QTE (Combate & Entrenamiento)",
+})
+
+-- Toggle y Delay para DODGE
+QTEGroup:AddToggle("AutoDodge", {
+	Text = "Auto Dodge",
+	Default = true,
+	Tooltip = "Activa el esquive automático en combate",
+})
+
+QTEGroup:AddSlider("DodgeDelay", {
+	Text = "Dodge Delay (Segundos)",
+	Default = 0.05,
+	Min = 0,
+	Max = 1,
+	Rounding = 2,
+	Compact = false,
+	Tooltip = "Tiempo que espera antes de esquivar",
+})
+
+QTEGroup:AddDivider()
+
+-- Toggle y Delay para HIT
+QTEGroup:AddToggle("AutoHit", {
+	Text = "Auto Hit (Entrenamiento)",
+	Default = true,
+	Tooltip = "Activa el golpe automático en el modo entrenamiento",
+})
+
+QTEGroup:AddSlider("HitDelay", {
+	Text = "Hit Delay (Segundos)",
+	Default = 0.20,
+	Min = 0,
+	Max = 1,
+	Rounding = 2,
+	Compact = false,
+	Tooltip = "Sube este valor a 0.20s - 0.30s para evitar la sanción de 10 minutos",
+})
+
+-- Lógica del Auto-QTE
+local Players = game:GetService("Players")
+local localPlayer = Players.LocalPlayer
+local playerGui = localPlayer:WaitForChild("PlayerGui")
+
+local function clickButton(button)
+	if firesignal then
+		pcall(function() firesignal(button.MouseButton1Click) end)
+		pcall(function() firesignal(button.Activated) end)
+	end
+	if getconnections then
+		for _, conn in ipairs(getconnections(button.MouseButton1Click)) do
+			pcall(function() conn:Fire() end)
+		end
+		for _, conn in ipairs(getconnections(button.Activated)) do
+			pcall(function() conn:Fire() end)
+		end
+	end
+end
+
+local function handleQTE(button)
+	if not button:IsA("GuiButton") then return end
+
+	local buttonText = button:IsA("TextButton") and button.Text or ""
+	local combined = (button.Name .. " " .. buttonText):upper()
+
+	local isDodge = combined:find("DODGE")
+	local isHit = combined:find("HIT")
+
+	if not (isDodge or isHit) then return end
+
+	local function process()
+		if not button.Visible then return end
+
+		if isDodge and Toggles.AutoDodge and Toggles.AutoDodge.Value then
+			local delayVal = Options.DodgeDelay and Options.DodgeDelay.Value or 0
+			if delayVal > 0 then task.wait(delayVal) end
+
+			if button.Visible then
+				clickButton(button)
+				Library:Notify({
+					Title = "D666Scripts",
+					Description = "Esquivado con éxito!",
+					Time = 1.5,
+				})
+			end
+		elseif isHit and Toggles.AutoHit and Toggles.AutoHit.Value then
+			local delayVal = Options.HitDelay and Options.HitDelay.Value or 0
+			if delayVal > 0 then task.wait(delayVal) end
+
+			if button.Visible then
+				clickButton(button)
+				Library:Notify({
+					Title = "D666Scripts",
+					Description = "Golpe de entrenamiento ejecutado!",
+					Time = 1.5,
+				})
+			end
+		end
+	end
+
+	if button.Visible then
+		task.spawn(process)
+	end
+
+	button:GetPropertyChangedSignal("Visible"):Connect(function()
+		if button.Visible then
+			task.spawn(process)
+		end
+	end)
+end
+
+-- Vincular elementos existentes y futuros
+for _, descendant in ipairs(playerGui:GetDescendants()) do
+	handleQTE(descendant)
+end
+
+playerGui.DescendantAdded:Connect(function(descendant)
+	handleQTE(descendant)
+end)
+
+-- Configuración del tema y guardado
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+ThemeManager:SetFolder("D666Scripts")
+SaveManager:SetFolder("D666Scripts/configs")
+
+SaveManager:BuildConfigSection(Tabs["UI Settings"])
+ThemeManager:ApplyToTab(Tabs["UI Settings"])
+
+-- Aplicar tema 'Ruby' (el tema oficial en Obsidian para rojo puro, ya que 'Dark' o 'Default' carga morado)
+pcall(function()
+	ThemeManager:ApplyTheme("Ruby")
+end)
+
+-- Respaldo directo en caso de que la lista de temas no cargue el archivo 'Ruby' desde GitHub
+if Options and Options.AccentColor then
+	Options.AccentColor:SetValueRGB(Color3.fromRGB(255, 30, 30))
+end
+
+Library:Notify({
+	Title = "D666Scripts Cargado",
+	Description = "Interfaz cargada en Rojo.",
+	Time = 4,
+})
