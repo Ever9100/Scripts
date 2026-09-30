@@ -85,6 +85,8 @@ local Players = game:GetService("Players")
 local localPlayer = Players.LocalPlayer
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 
+local trackedButtons = setmetatable({}, {__mode = "k"})
+
 local function notify(title, description, timeVal)
 	if Toggles.ShowNotifications and Toggles.ShowNotifications.Value then
 		Library:Notify({
@@ -99,8 +101,7 @@ local function clickButton(button)
 	if firesignal then
 		pcall(function() firesignal(button.MouseButton1Click) end)
 		pcall(function() firesignal(button.Activated) end)
-	end
-	if getconnections then
+	elseif getconnections then
 		for _, conn in ipairs(getconnections(button.MouseButton1Click)) do
 			pcall(function() conn:Fire() end)
 		end
@@ -111,7 +112,7 @@ local function clickButton(button)
 end
 
 local function handleQTE(button)
-	if not button:IsA("GuiButton") then return end
+	if not button:IsA("GuiButton") or trackedButtons[button] then return end
 
 	local buttonText = button:IsA("TextButton") and button.Text or ""
 	local combined = (button.Name .. " " .. buttonText):upper()
@@ -121,8 +122,12 @@ local function handleQTE(button)
 
 	if not (isDodge or isHit) then return end
 
+	trackedButtons[button] = true
+	local isProcessing = false
+
 	local function process()
-		if not button.Visible then return end
+		if isProcessing or not button.Visible then return end
+		isProcessing = true
 
 		if isDodge and Toggles.AutoDodge and Toggles.AutoDodge.Value then
 			local delayVal = Options.DodgeDelay and Options.DodgeDelay.Value or 0
@@ -141,6 +146,9 @@ local function handleQTE(button)
 				notify("D666Scripts", "Training Hit Executed!")
 			end
 		end
+
+		task.wait(0.05)
+		isProcessing = false
 	end
 
 	if button.Visible then
