@@ -58,6 +58,38 @@ QTEGroup:AddSlider("HitDelay", {
 	Tooltip = "Set to 0.20s - 0.30s to avoid anti-cheat timeout",
 })
 
+local SkillGroup = Tabs.Main:AddGroupbox({
+	Side = "Right",
+	Name = "Auto Skill",
+})
+
+SkillGroup:AddToggle("AutoSkill", {
+	Text = "Auto Skill",
+	Default = false,
+	Tooltip = "Automatically uses selected skill slots during combat",
+})
+
+SkillGroup:AddSlider("SkillDelay", {
+	Text = "Skill Delay (Seconds)",
+	Default = 0.50,
+	Min = 0.1,
+	Max = 3,
+	Rounding = 2,
+	Compact = false,
+	Tooltip = "Cooldown between using skills",
+})
+
+SkillGroup:AddDropdown("SelectedSlots", {
+	Values = {
+		"Slot 1", "Slot 2", "Slot 3", "Slot 4", "Slot 5",
+		"Slot 6", "Slot 7", "Slot 8", "Slot 9", "Slot 10"
+	},
+	Default = 1,
+	Multi = true,
+	Text = "Select Skill Slots",
+	Tooltip = "Choose which slot numbers to use automatically",
+})
+
 local SettingsGroup = Tabs["UI Settings"]:AddGroupbox({
 	Side = "Left",
 	Name = "Menu Settings",
@@ -168,6 +200,58 @@ end
 
 playerGui.DescendantAdded:Connect(function(descendant)
 	handleQTE(descendant)
+end)
+
+local function getOrderedSkillButtons()
+	local buttons = {}
+	for _, desc in ipairs(playerGui:GetDescendants()) do
+		if desc:IsA("GuiButton") and desc.Visible and desc.AbsoluteSize.X > 0 and desc.AbsoluteSize.Y > 0 then
+			local nameUpper = desc.Name:upper()
+			local textUpper = (desc:IsA("TextButton") and desc.Text or ""):upper()
+			if not (nameUpper:find("DODGE") or nameUpper:find("HIT") or textUpper:find("DODGE") or textUpper:find("HIT")) then
+				if desc:FindFirstAncestor("CombatView") or (desc.Parent and (desc.Parent.Name:lower():find("skill") or desc.Parent.Name:lower():find("active") or desc.Parent.Name:lower():find("action") or desc.Parent.Name:lower():find("content"))) then
+					table.insert(buttons, desc)
+				end
+			end
+		end
+	end
+
+	table.sort(buttons, function(a, b)
+		if math.abs(a.AbsolutePosition.Y - b.AbsolutePosition.Y) > 15 then
+			return a.AbsolutePosition.Y < b.AbsolutePosition.Y
+		end
+		return a.AbsolutePosition.X < b.AbsolutePosition.X
+	end)
+
+	return buttons
+end
+
+task.spawn(function()
+	while task.wait() do
+		if Toggles.AutoSkill and Toggles.AutoSkill.Value then
+			local selected = Options.SelectedSlots and Options.SelectedSlots.Value or {}
+			local delayVal = Options.SkillDelay and Options.SkillDelay.Value or 0.5
+			local skillButtons = getOrderedSkillButtons()
+
+			if #skillButtons > 0 then
+				for slotNum = 1, 10 do
+					if not (Toggles.AutoSkill and Toggles.AutoSkill.Value) then break end
+					local slotKey = "Slot " .. tostring(slotNum)
+					if selected[slotKey] and skillButtons[slotNum] then
+						local btn = skillButtons[slotNum]
+						if btn and btn.Visible and btn.Parent then
+							clickButton(btn)
+							task.wait(delayVal)
+						end
+					end
+				end
+			else
+				task.wait(0.5)
+			end
+		else
+			task.wait(0.5)
+		end
+	end
 end)
 
 ThemeManager:SetLibrary(Library)
