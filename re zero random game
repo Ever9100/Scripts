@@ -69,8 +69,25 @@ SettingsGroup:AddDropdown("DPIDropdown", {
 local Players = game:GetService("Players")
 local vim = game:GetService("VirtualInputManager")
 local guiService = game:GetService("GuiService")
+local VirtualUser = game:GetService("VirtualUser")
 local localPlayer = Players.LocalPlayer
 local playerGui = localPlayer:WaitForChild("PlayerGui")
+
+-- Anti-AFK Reactivo (Respaldo cuando salta el evento de inactividad)
+localPlayer.Idled:Connect(function()
+	VirtualUser:CaptureController()
+	VirtualUser:ClickButton2(Vector2.new())
+end)
+
+-- Anti-AFK Proactivo (Reinicia el contador de inactividad cada 2 minutos)
+task.spawn(function()
+	while task.wait(120) do
+		pcall(function()
+			VirtualUser:CaptureController()
+			VirtualUser:ClickButton2(Vector2.new())
+		end)
+	end
+end)
 
 local trackedButtons = setmetatable({}, {__mode = "k"})
 
@@ -84,18 +101,44 @@ local function notify(title, description, timeVal)
 	end
 end
 
+local function cleanText(str)
+	if not str then return "" end
+	str = string.lower(str)
+	str = str:gsub("[\r\n\t]", " ")
+	str = str:gsub("%s+", " ")
+	return str:match("^%s*(.-)%s*$") or ""
+end
+
+local function singleClick(btn)
+	pcall(function()
+		local inset = guiService:GetGuiInset()
+		local x = btn.AbsolutePosition.X + (btn.AbsoluteSize.X / 2)
+		local y = btn.AbsolutePosition.Y + (btn.AbsoluteSize.Y / 2) + inset.Y
+
+		vim:SendMouseButtonEvent(x, y, 0, true, game, 0)
+		task.wait(0.08)
+		vim:SendMouseButtonEvent(x, y, 0, false, game, 0)
+	end)
+end
+
 local function clickButton(button)
 	if not button then return end
+	local clicked = false
+
 	if firesignal then
-		pcall(function() firesignal(button.MouseButton1Click) end)
-		pcall(function() firesignal(button.Activated) end)
+		pcall(function() firesignal(button.MouseButton1Click) clicked = true end)
+		pcall(function() firesignal(button.Activated) clicked = true end)
 	elseif getconnections then
 		for _, conn in ipairs(getconnections(button.MouseButton1Click)) do
-			pcall(function() conn:Fire() end)
+			pcall(function() conn:Fire() clicked = true end)
 		end
 		for _, conn in ipairs(getconnections(button.Activated)) do
-			pcall(function() conn:Fire() end)
+			pcall(function() conn:Fire() clicked = true end)
 		end
+	end
+
+	if not clicked then
+		singleClick(button)
 	end
 end
 
@@ -110,6 +153,24 @@ local function isReallyVisible(obj)
 		current = current.Parent
 	end
 	return true
+end
+
+local function clickChoiceButton(targetButton)
+	if not targetButton then return end
+
+	local scroller = targetButton:FindFirstAncestorOfClass("ScrollingFrame")
+	if scroller then
+		pcall(function()
+			local targetY = targetButton.AbsolutePosition.Y
+			local scrollerY = scroller.AbsolutePosition.Y
+			local currentCanvasY = scroller.CanvasPosition.Y
+			local newCanvasY = math.max(0, currentCanvasY + (targetY - scrollerY) - 10)
+			scroller.CanvasPosition = Vector2.new(scroller.CanvasPosition.X, newCanvasY)
+		end)
+		task.wait(0.15)
+	end
+
+	clickButton(targetButton)
 end
 
 local function handleQTE(button)
@@ -262,19 +323,6 @@ local prideRouteChoices = {
     "Declare yourself the Sin Archbishop of Pride and charge"
 }
 
-local function singleClick(btn)
-    if not isReallyVisible(btn) then return end
-    pcall(function()
-        local inset = guiService:GetGuiInset()
-        local x = btn.AbsolutePosition.X + (btn.AbsoluteSize.X / 2)
-        local y = btn.AbsolutePosition.Y + (btn.AbsoluteSize.Y / 2) + inset.Y
-
-        vim:SendMouseButtonEvent(x, y, 0, true, game, 0)
-        task.wait(0.08)
-        vim:SendMouseButtonEvent(x, y, 0, false, game, 0)
-    end)
-end
-
 local function isChoicePopupOpen()
     local popup = playerGui:FindFirstChild("MainMenu") 
         and playerGui.MainMenu.Root:FindFirstChild("ChoicePopup")
@@ -285,20 +333,23 @@ end
 local function checkAndClickChoice()
     if not isChoicePopupOpen() then return false end
 
-    local optionsFrame = playerGui.MainMenu.Root.ChoicePopup.Frame:FindFirstChild("Options")
-    if not optionsFrame or not isReallyVisible(optionsFrame) then return false end
+    local popup = playerGui.MainMenu.Root.ChoicePopup
+    local optionsFrame = popup.Frame:FindFirstChild("Options") or popup.Frame
+    if not optionsFrame then return false end
 
     for _, targetPhrase in ipairs(prideRouteChoices) do
-        local phraseLower = string.lower(targetPhrase)
+        local phraseClean = cleanText(targetPhrase)
 
         for _, elem in ipairs(optionsFrame:GetDescendants()) do
-            if isReallyVisible(elem) and (elem:IsA("TextButton") or elem:IsA("TextLabel")) and elem.Text ~= "" then
-                if string.find(string.lower(elem.Text), phraseLower, 1, true) then
+            if (elem:IsA("TextButton") or elem:IsA("TextLabel")) and elem.Text ~= "" then
+                local elemClean = cleanText(elem.Text)
+
+                if string.find(elemClean, phraseClean, 1, true) then
                     local targetButton = elem:IsA("TextButton") and elem or elem:FindFirstAncestorOfClass("TextButton")
 
-                    if targetButton and isReallyVisible(targetButton) then
+                    if targetButton then
                         notify("D666Scripts", "Choice selected: " .. elem.Text, 2)
-                        singleClick(targetButton)
+                        clickChoiceButton(targetButton)
                         return true
                     end
                 end
@@ -336,9 +387,9 @@ local function handleLoopSettles()
                             end
                         end
                     end
-                    if firstOption then singleClick(firstOption) task.wait(0.4) end
+                    if firstOption then clickChoiceButton(firstOption) task.wait(0.4) end
                     if confirmBtn then
-                        singleClick(confirmBtn)
+                        clickChoiceButton(confirmBtn)
                         return true
                     end
                 elseif isDivine then
@@ -353,9 +404,9 @@ local function handleLoopSettles()
                             end
                         end
                     end
-                    if firstOption then singleClick(firstOption) task.wait(0.4) end
-                    if takeBtn and isReallyVisible(takeBtn) then
-                        singleClick(takeBtn)
+                    if firstOption then clickChoiceButton(firstOption) task.wait(0.4) end
+                    if takeBtn then
+                        clickChoiceButton(takeBtn)
                         return true
                     end
                 end
@@ -372,8 +423,8 @@ local function clickReadyToGoBack()
         if isReallyVisible(elem) and (elem:IsA("TextButton") or elem:IsA("TextLabel")) and elem.Text ~= "" then
             if string.find(string.lower(elem.Text), "ready to go back", 1, true) then
                 local btn = elem:IsA("TextButton") and elem or elem:FindFirstAncestorOfClass("TextButton")
-                if btn and isReallyVisible(btn) then
-                    singleClick(btn)
+                if btn then
+                    clickChoiceButton(btn)
                     return true
                 end
             end
@@ -389,8 +440,8 @@ local function clickContinueStory()
         if isReallyVisible(elem) and (elem:IsA("TextButton") or elem:IsA("TextLabel")) and elem.Text ~= "" then
             if string.find(string.lower(elem.Text), "continue story", 1, true) then
                 local btn = elem:IsA("TextButton") and elem or elem:FindFirstAncestorOfClass("TextButton")
-                if btn and isReallyVisible(btn) then
-                    singleClick(btn)
+                if btn then
+                    clickChoiceButton(btn)
                     return true
                 end
             end
@@ -404,11 +455,26 @@ local function clickReturn()
 
     for _, elem in ipairs(playerGui:GetDescendants()) do
         if isReallyVisible(elem) and (elem:IsA("TextButton") or elem:IsA("TextLabel")) and elem.Text ~= "" then
-            local textLower = string.lower(elem.Text)
-            if string.find(textLower, "return", 1, true) then
+            local textClean = cleanText(elem.Text)
+            if textClean == "yes" or textClean == "confirm" or textClean == "accept" or string.find(textClean, "yes", 1, true) or string.find(textClean, "confirm", 1, true) then
                 local btn = elem:IsA("TextButton") and elem or elem:FindFirstAncestorOfClass("TextButton")
                 if btn and isReallyVisible(btn) then
-                    singleClick(btn)
+                    notify("D666Scripts", "Confirmed Return: " .. elem.Text, 2)
+                    clickChoiceButton(btn)
+                    return true
+                end
+            end
+        end
+    end
+
+    for _, elem in ipairs(playerGui:GetDescendants()) do
+        if isReallyVisible(elem) and (elem:IsA("TextButton") or elem:IsA("TextLabel")) and elem.Text ~= "" then
+            local textClean = cleanText(elem.Text)
+            if string.find(textClean, "return", 1, true) then
+                local btn = elem:IsA("TextButton") and elem or elem:FindFirstAncestorOfClass("TextButton")
+                if btn and isReallyVisible(btn) then
+                    notify("D666Scripts", "Clicking Return: " .. elem.Text, 2)
+                    clickChoiceButton(btn)
                     return true
                 end
             end
