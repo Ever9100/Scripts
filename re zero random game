@@ -16,91 +16,44 @@ local Window = Library:CreateWindow({
 
 local Tabs = {
 	Main = Window:AddTab("Main", "swords"),
+	AutoRoutes = Window:AddTab("Auto Routes", "scroll"),
 	["UI Settings"] = Window:AddTab("UI Settings", "settings"),
 }
 
-local QTEGroup = Tabs.Main:AddGroupbox({
-	Side = "Left",
-	Name = "Auto QTE (Combat & Training)",
-})
+local QTEGroup = Tabs.Main:AddGroupbox({ Side = "Left", Name = "Auto QTE (Combat & Training)" })
 
-QTEGroup:AddToggle("AutoDodge", {
-	Text = "Auto Dodge",
-	Default = true,
-	Tooltip = "Automatically dodges incoming attacks",
-})
-
-QTEGroup:AddSlider("DodgeDelay", {
-	Text = "Dodge Delay (Seconds)",
-	Default = 0.05,
-	Min = 0,
-	Max = 1,
-	Rounding = 2,
-	Compact = false,
-	Tooltip = "Delay duration before executing dodge",
-})
-
+QTEGroup:AddToggle("AutoDodge", { Text = "Auto Dodge", Default = true, Tooltip = "Automatically dodges incoming attacks" })
+QTEGroup:AddSlider("DodgeDelay", { Text = "Dodge Delay (Seconds)", Default = 0.05, Min = 0, Max = 1, Rounding = 2, Compact = false, Tooltip = "Delay duration before executing dodge" })
 QTEGroup:AddDivider()
+QTEGroup:AddToggle("AutoHit", { Text = "Auto Hit (Training)", Default = true, Tooltip = "Automatically hits in training mode" })
+QTEGroup:AddSlider("HitDelay", { Text = "Hit Delay (Seconds)", Default = 0.20, Min = 0, Max = 1, Rounding = 2, Compact = false, Tooltip = "Set to 0.20s - 0.30s to avoid anti-cheat timeout" })
 
-QTEGroup:AddToggle("AutoHit", {
-	Text = "Auto Hit (Training)",
-	Default = true,
-	Tooltip = "Automatically hits in training mode",
-})
-
-QTEGroup:AddSlider("HitDelay", {
-	Text = "Hit Delay (Seconds)",
-	Default = 0.20,
-	Min = 0,
-	Max = 1,
-	Rounding = 2,
-	Compact = false,
-	Tooltip = "Set to 0.20s - 0.30s to avoid anti-cheat timeout",
-})
-
-local SkillGroup = Tabs.Main:AddGroupbox({
-	Side = "Right",
-	Name = "Auto Skill",
-})
-
-SkillGroup:AddToggle("AutoSkill", {
-	Text = "Auto Skill",
-	Default = false,
-	Tooltip = "Automatically uses selected skill slots during combat",
-})
-
-SkillGroup:AddSlider("SkillDelay", {
-	Text = "Skill Delay (Seconds)",
-	Default = 0.10,
-	Min = 0,
-	Max = 3,
-	Rounding = 2,
-	Compact = false,
-	Tooltip = "Cooldown between using skills (0 = Instant)",
-})
-
+local SkillGroup = Tabs.Main:AddGroupbox({ Side = "Right", Name = "Auto Skill" })
+SkillGroup:AddToggle("AutoSkill", { Text = "Auto Skill", Default = false, Tooltip = "Automatically uses selected skill slots during combat" })
+SkillGroup:AddSlider("SkillDelay", { Text = "Skill Delay (Seconds)", Default = 0.10, Min = 0, Max = 3, Rounding = 2, Compact = false, Tooltip = "Cooldown between using skills (0 = Instant)" })
 SkillGroup:AddDropdown("SelectedSlots", {
-	Values = {
-		"Slot 1", "Slot 2", "Slot 3", "Slot 4", "Slot 5",
-		"Slot 6", "Slot 7", "Slot 8", "Slot 9", "Slot 10"
-	},
+	Values = { "Slot 1", "Slot 2", "Slot 3", "Slot 4", "Slot 5", "Slot 6", "Slot 7", "Slot 8", "Slot 9", "Slot 10" },
 	Default = 1,
 	Multi = true,
 	Text = "Select Skill Slots",
 	Tooltip = "Choose which slot numbers to use automatically",
 })
 
-local SettingsGroup = Tabs["UI Settings"]:AddGroupbox({
-	Side = "Left",
-	Name = "Menu Settings",
+local RoutesGroup = Tabs.AutoRoutes:AddGroupbox({ Side = "Left", Name = "IF Routes Auto-Farm" })
+RoutesGroup:AddToggle("AutoPride", {
+	Text = "Pride Ending Route",
+	Default = false,
+	Tooltip = "Automatically handles Pride choices, Magic, Divine Protections, and Rebirth",
+	Callback = function(Value)
+		getgenv().AutoPride = Value
+		if Value then
+			startPrideLoop()
+		end
+	end,
 })
 
-SettingsGroup:AddToggle("ShowNotifications", {
-	Text = "Enable Notifications",
-	Default = true,
-	Tooltip = "Toggle script pop-up notifications",
-})
-
+local SettingsGroup = Tabs["UI Settings"]:AddGroupbox({ Side = "Left", Name = "Menu Settings" })
+SettingsGroup:AddToggle("ShowNotifications", { Text = "Enable Notifications", Default = true, Tooltip = "Toggle script pop-up notifications" })
 SettingsGroup:AddDropdown("DPIDropdown", {
 	Values = { "50%", "75%", "100%", "125%", "150%", "175%", "200%" },
 	Default = "100%",
@@ -114,6 +67,8 @@ SettingsGroup:AddDropdown("DPIDropdown", {
 })
 
 local Players = game:GetService("Players")
+local vim = game:GetService("VirtualInputManager")
+local guiService = game:GetService("GuiService")
 local localPlayer = Players.LocalPlayer
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 
@@ -142,6 +97,19 @@ local function clickButton(button)
 			pcall(function() conn:Fire() end)
 		end
 	end
+end
+
+local function isReallyVisible(obj)
+	if not (obj and obj:IsA("GuiObject")) then return false end
+	if obj.AbsoluteSize.X <= 5 or obj.AbsoluteSize.Y <= 5 then return false end
+
+	local current = obj
+	while current and current:IsA("GuiObject") do
+		if not current.Visible then return false end
+		if current:IsA("CanvasGroup") and current.GroupTransparency >= 0.9 then return false end
+		current = current.Parent
+	end
+	return true
 end
 
 local function handleQTE(button)
@@ -203,23 +171,10 @@ playerGui.DescendantAdded:Connect(function(descendant)
 	handleQTE(descendant)
 end)
 
-local function isReallyVisible(obj)
-	if not (obj and obj:IsA("GuiObject")) then return false end
-	if obj.AbsoluteSize.X <= 5 or obj.AbsoluteSize.Y <= 5 then return false end
-
-	local current = obj
-	while current and current:IsA("GuiObject") do
-		if not current.Visible then return false end
-		if current:IsA("CanvasGroup") and current.GroupTransparency >= 0.9 then return false end
-		current = current.Parent
-	end
-	return true
-end
-
 local function getOrderedSkillButtons()
 	local buttons = {}
-
 	local skillsPanel = nil
+
 	for _, desc in ipairs(playerGui:GetDescendants()) do
 		if desc.Name == "SkillsPanel" and isReallyVisible(desc) then
 			skillsPanel = desc
@@ -227,11 +182,8 @@ local function getOrderedSkillButtons()
 		end
 	end
 
-	if not skillsPanel then
-		return buttons
-	end
+	if not skillsPanel then return buttons end
 
-	-- Slots 1 a 5 (Fila SetRow)
 	local setRow = skillsPanel:FindFirstChild("SetRow")
 	if setRow then
 		table.insert(buttons, setRow:FindFirstChild("Set_Flee"))
@@ -241,7 +193,6 @@ local function getOrderedSkillButtons()
 		table.insert(buttons, setRow:FindFirstChild("Set_HeavyAttack"))
 	end
 
-	-- Slots 6 a 10 (Fila ActiveRow)
 	local activeRow = skillsPanel:FindFirstChild("ActiveRow")
 	if activeRow then
 		table.insert(buttons, activeRow:FindFirstChild("Active_1"))
@@ -269,9 +220,7 @@ task.spawn(function()
 						local btn = skillButtons[slotNum]
 						if btn and isReallyVisible(btn) then
 							clickButton(btn)
-							if delayVal > 0 then
-								task.wait(delayVal)
-							end
+							if delayVal > 0 then task.wait(delayVal) end
 						end
 					end
 				end
@@ -283,6 +232,220 @@ task.spawn(function()
 		end
 	end
 end)
+
+getgenv().AutoPride = false
+local isProcessingPride = false
+
+local prideRouteChoices = {
+    "Cut through the alley by yourself",
+    "Point the city guards at her and slip away",
+    "Bribe the slum folk to misdirect them, then cut the rest",
+    "Walk straight up to the robed figures",
+    "Take the first kill yourself",
+    "Give him the test he asked for",
+    "Stab him mid-sentence and counter everything",
+    "Hold the ridge until it loses interest",
+    "Offer Ferris a purpose: make Emilia queen",
+    "Burn it all, wives included",
+    "Make Ferris do it",
+    "Buy the debt slave's contract",
+    "Burn the warehouse with the Fang inside",
+    "Break her gang in front of the whole district",
+    "Let her try, then let her follow Roswaal",
+    "Burn the noble quarter and the guild halls",
+    "Send Elsa to cut the hero's route",
+    "Tell him about every death it took to get here",
+    "Ask him, honestly, how he lives with being the hero",
+    "Ride the beast through them",
+    "Talk to the cat like an old friend",
+    "Tell her everything you did to make her queen",
+    "Declare yourself the Sin Archbishop of Pride and charge"
+}
+
+local function singleClick(btn)
+    if not isReallyVisible(btn) then return end
+    pcall(function()
+        local inset = guiService:GetGuiInset()
+        local x = btn.AbsolutePosition.X + (btn.AbsoluteSize.X / 2)
+        local y = btn.AbsolutePosition.Y + (btn.AbsoluteSize.Y / 2) + inset.Y
+
+        vim:SendMouseButtonEvent(x, y, 0, true, game, 0)
+        task.wait(0.08)
+        vim:SendMouseButtonEvent(x, y, 0, false, game, 0)
+    end)
+end
+
+local function isChoicePopupOpen()
+    local popup = playerGui:FindFirstChild("MainMenu") 
+        and playerGui.MainMenu.Root:FindFirstChild("ChoicePopup")
+    
+    return popup and isReallyVisible(popup) and isReallyVisible(popup:FindFirstChild("Frame"))
+end
+
+local function checkAndClickChoice()
+    if not isChoicePopupOpen() then return false end
+
+    local optionsFrame = playerGui.MainMenu.Root.ChoicePopup.Frame:FindFirstChild("Options")
+    if not optionsFrame or not isReallyVisible(optionsFrame) then return false end
+
+    for _, targetPhrase in ipairs(prideRouteChoices) do
+        local phraseLower = string.lower(targetPhrase)
+
+        for _, elem in ipairs(optionsFrame:GetDescendants()) do
+            if isReallyVisible(elem) and (elem:IsA("TextButton") or elem:IsA("TextLabel")) and elem.Text ~= "" then
+                if string.find(string.lower(elem.Text), phraseLower, 1, true) then
+                    local targetButton = elem:IsA("TextButton") and elem or elem:FindFirstAncestorOfClass("TextButton")
+
+                    if targetButton and isReallyVisible(targetButton) then
+                        notify("D666Scripts", "Choice selected: " .. elem.Text, 2)
+                        singleClick(targetButton)
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function handleLoopSettles()
+    for _, elem in ipairs(playerGui:GetDescendants()) do
+        if elem:IsA("TextLabel") and string.find(string.lower(elem.Text), "the loop settles", 1, true) and isReallyVisible(elem) then
+            local container = elem:FindFirstAncestorOfClass("Frame") or elem.Parent
+            if container and isReallyVisible(container) then
+                local isMagic = false
+                local isDivine = false
+                
+                for _, child in ipairs(container:GetDescendants()) do
+                    if child:IsA("TextLabel") and isReallyVisible(child) then
+                        local t = string.lower(child.Text)
+                        if t == "magic" then isMagic = true end
+                        if string.find(t, "divine protection", 1, true) then isDivine = true end
+                    end
+                end
+                
+                if isMagic then
+                    local firstOption, confirmBtn
+                    for _, child in ipairs(container:GetDescendants()) do
+                        if child:IsA("TextButton") and isReallyVisible(child) then
+                            local btnText = string.lower(child.Text)
+                            if string.find(btnText, "choose", 1, true) then
+                                confirmBtn = child
+                            elseif not firstOption then
+                                firstOption = child
+                            end
+                        end
+                    end
+                    if firstOption then singleClick(firstOption) task.wait(0.4) end
+                    if confirmBtn then
+                        singleClick(confirmBtn)
+                        return true
+                    end
+                elseif isDivine then
+                    local firstOption, takeBtn
+                    for _, child in ipairs(container:GetDescendants()) do
+                        if (child:IsA("TextButton") or child:IsA("TextLabel")) and isReallyVisible(child) then
+                            local textLower = string.lower(child.Text)
+                            if string.find(textLower, "take", 1, true) then
+                                takeBtn = child:IsA("TextButton") and child or child:FindFirstAncestorOfClass("TextButton")
+                            elseif not firstOption and (child:IsA("TextButton") or string.find(textLower, "lvl.0", 1, true) or string.find(textLower, "not yet held", 1, true)) then
+                                firstOption = child:IsA("TextButton") and child or child:FindFirstAncestorOfClass("TextButton")
+                            end
+                        end
+                    end
+                    if firstOption then singleClick(firstOption) task.wait(0.4) end
+                    if takeBtn and isReallyVisible(takeBtn) then
+                        singleClick(takeBtn)
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function clickReadyToGoBack()
+    if isChoicePopupOpen() then return false end
+
+    for _, elem in ipairs(playerGui:GetDescendants()) do
+        if isReallyVisible(elem) and (elem:IsA("TextButton") or elem:IsA("TextLabel")) and elem.Text ~= "" then
+            if string.find(string.lower(elem.Text), "ready to go back", 1, true) then
+                local btn = elem:IsA("TextButton") and elem or elem:FindFirstAncestorOfClass("TextButton")
+                if btn and isReallyVisible(btn) then
+                    singleClick(btn)
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function clickContinueStory()
+    if isChoicePopupOpen() then return false end
+
+    for _, elem in ipairs(playerGui:GetDescendants()) do
+        if isReallyVisible(elem) and (elem:IsA("TextButton") or elem:IsA("TextLabel")) and elem.Text ~= "" then
+            if string.find(string.lower(elem.Text), "continue story", 1, true) then
+                local btn = elem:IsA("TextButton") and elem or elem:FindFirstAncestorOfClass("TextButton")
+                if btn and isReallyVisible(btn) then
+                    singleClick(btn)
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function clickReturn()
+    if isChoicePopupOpen() then return false end
+
+    for _, elem in ipairs(playerGui:GetDescendants()) do
+        if isReallyVisible(elem) and (elem:IsA("TextButton") or elem:IsA("TextLabel")) and elem.Text ~= "" then
+            local textLower = string.lower(elem.Text)
+            if string.find(textLower, "return", 1, true) then
+                local btn = elem:IsA("TextButton") and elem or elem:FindFirstAncestorOfClass("TextButton")
+                if btn and isReallyVisible(btn) then
+                    singleClick(btn)
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+function startPrideLoop()
+    task.spawn(function()
+        notify("D666Scripts", "Pride Route Automator Enabled", 3)
+        while getgenv().AutoPride do
+            if not isProcessingPride then
+                isProcessingPride = true
+
+                if isChoicePopupOpen() then
+                    local selected = checkAndClickChoice()
+                    task.wait(selected and 3.5 or 1.5)
+                elseif handleLoopSettles() then
+                    task.wait(2.5)
+                elseif clickReadyToGoBack() then
+                    task.wait(3.5)
+                elseif clickContinueStory() then
+                    task.wait(2.5)
+                elseif clickReturn() then
+                    task.wait(3.0)
+                else
+                    task.wait(1.0)
+                end
+
+                isProcessingPride = false
+            end
+            task.wait(0.4)
+        end
+        notify("D666Scripts", "Pride Route Automator Disabled", 3)
+    end)
+end
 
 ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
