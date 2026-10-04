@@ -20,13 +20,13 @@ local Tabs = {
 	["UI Settings"] = Window:AddTab("UI Settings", "settings"),
 }
 
+-- === MAIN TAB ===
 local QTEGroup = Tabs.Main:AddGroupbox({ Side = "Left", Name = "Auto QTE (Combat & Training)" })
-
 QTEGroup:AddToggle("AutoDodge", { Text = "Auto Dodge", Default = true, Tooltip = "Automatically dodges incoming attacks" })
 QTEGroup:AddSlider("DodgeDelay", { Text = "Dodge Delay (Seconds)", Default = 0.05, Min = 0, Max = 1, Rounding = 2, Compact = false, Tooltip = "Delay duration before executing dodge" })
 QTEGroup:AddDivider()
 QTEGroup:AddToggle("AutoHit", { Text = "Auto Hit (Training)", Default = true, Tooltip = "Automatically hits in training mode" })
-QTEGroup:AddSlider("HitDelay", { Text = "Hit Delay (Seconds)", Default = 0.20, Min = 0, Max = 1, Rounding = 2, Compact = false, Tooltip = "Set to 0.20s - 0.30s to avoid anti-cheat timeout" })
+QTEGroup:AddSlider("HitDelay", { Text = "Hit Delay (Seconds)", Default = 0.20, Min = 0, Max = 2, Rounding = 2, Compact = false, Tooltip = "Set to 0.20s - 0.30s to avoid anti-cheat timeout" })
 
 local SkillGroup = Tabs.Main:AddGroupbox({ Side = "Right", Name = "Auto Skill" })
 SkillGroup:AddToggle("AutoSkill", { Text = "Auto Skill", Default = false, Tooltip = "Automatically uses selected skill slots during combat" })
@@ -39,6 +39,7 @@ SkillGroup:AddDropdown("SelectedSlots", {
 	Tooltip = "Choose which slot numbers to use automatically",
 })
 
+-- === AUTO ROUTES TAB ===
 local RoutesGroup = Tabs.AutoRoutes:AddGroupbox({ Side = "Left", Name = "IF Routes Auto-Farm" })
 RoutesGroup:AddToggle("AutoPride", {
 	Text = "Pride Ending Route",
@@ -52,6 +53,29 @@ RoutesGroup:AddToggle("AutoPride", {
 	end,
 })
 
+local DungeonGroup = Tabs.AutoRoutes:AddGroupbox({ Side = "Right", Name = "Jester's Dungeon Auto-Farm" })
+DungeonGroup:AddToggle("AutoDungeonTreat", {
+	Text = "Auto Dungeon (Treat Only)",
+	Default = false,
+	Tooltip = "Automatically chooses 'Take the Treat' and closes pop-ups to climb high safely",
+	Callback = function(Value)
+		getgenv().AutoDungeonTreat = Value
+		if Value then
+			startDungeonLoop()
+		end
+	end,
+})
+DungeonGroup:AddSlider("DungeonDelay", {
+	Text = "Click Delay (Seconds)",
+	Default = 0.3,
+	Min = 0.05,
+	Max = 2,
+	Rounding = 2,
+	Compact = false,
+	Tooltip = "Delay between choosing treats",
+})
+
+-- === UI SETTINGS TAB ===
 local SettingsGroup = Tabs["UI Settings"]:AddGroupbox({ Side = "Left", Name = "Menu Settings" })
 SettingsGroup:AddToggle("ShowNotifications", { Text = "Enable Notifications", Default = true, Tooltip = "Toggle script pop-up notifications" })
 SettingsGroup:AddDropdown("DPIDropdown", {
@@ -66,6 +90,7 @@ SettingsGroup:AddDropdown("DPIDropdown", {
 	end,
 })
 
+-- === SERVICES & SETUP ===
 local Players = game:GetService("Players")
 local vim = game:GetService("VirtualInputManager")
 local guiService = game:GetService("GuiService")
@@ -73,13 +98,13 @@ local VirtualUser = game:GetService("VirtualUser")
 local localPlayer = Players.LocalPlayer
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 
--- Anti-AFK Reactivo (Respaldo cuando salta el evento de inactividad)
+-- Anti-AFK Reactivo
 localPlayer.Idled:Connect(function()
 	VirtualUser:CaptureController()
 	VirtualUser:ClickButton2(Vector2.new())
 end)
 
--- Anti-AFK Proactivo (Reinicia el contador de inactividad cada 2 minutos)
+-- Anti-AFK Proactivo (Cada 2 minutos)
 task.spawn(function()
 	while task.wait(120) do
 		pcall(function()
@@ -173,6 +198,7 @@ local function clickChoiceButton(targetButton)
 	clickButton(targetButton)
 end
 
+-- === QTE & SKILLS LOGIC ===
 local function handleQTE(button)
 	if not button:IsA("GuiButton") or trackedButtons[button] then return end
 
@@ -294,6 +320,7 @@ task.spawn(function()
 	end
 end)
 
+-- === AUTO PRIDE ROUTE ===
 getgenv().AutoPride = false
 local isProcessingPride = false
 
@@ -513,6 +540,127 @@ function startPrideLoop()
     end)
 end
 
+-- === AUTO JESTER'S DUNGEON (TREAT ONLY + AUTO-CLOSE POPUPS) ===
+getgenv().AutoDungeonTreat = false
+local isProcessingDungeon = false
+
+local function processDungeonTreat()
+    -- 1. Detectar y cerrar ventana emergerte de Info de Ítem (DetailShade -> Botón 'X')
+    pcall(function()
+        local pageHolder = playerGui:FindFirstChild("MainMenu") 
+            and playerGui.MainMenu.Root:FindFirstChild("ContentPanel") 
+            and playerGui.MainMenu.Root.ContentPanel:FindFirstChild("PageHolder")
+            
+        if pageHolder then
+            local dungeonPage = pageHolder:FindFirstChild("Events|Dungeon")
+            if dungeonPage and isReallyVisible(dungeonPage) then
+                local detailShade = dungeonPage:FindFirstChild("DetailShade")
+                if detailShade and isReallyVisible(detailShade) then
+                    local detail = detailShade:FindFirstChild("Detail")
+                    if detail then
+                        local frame = detail:FindFirstChild("Frame")
+                        if frame then
+                            local closeBtn = frame:FindFirstChildOfClass("TextButton") or frame:FindFirstChild("TextButton")
+                            if closeBtn and isReallyVisible(closeBtn) then
+                                notify("D666Scripts", "Closed Item Detail Popup", 1.5)
+                                clickChoiceButton(closeBtn)
+                                return true
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+
+    -- Búsqueda secundaria de botón 'X' en caso de variaciones
+    for _, elem in ipairs(playerGui:GetDescendants()) do
+        if isReallyVisible(elem) and elem:IsA("TextButton") and elem.Text == "X" then
+            if elem:FindFirstAncestor("DetailShade") or elem.Parent.Name == "Frame" then
+                clickChoiceButton(elem)
+                return true
+            end
+        end
+    end
+
+    -- 2. Intentar clic directo en TakeTreat
+    pcall(function()
+        local pageHolder = playerGui:FindFirstChild("MainMenu") 
+            and playerGui.MainMenu.Root:FindFirstChild("ContentPanel") 
+            and playerGui.MainMenu.Root.ContentPanel:FindFirstChild("PageHolder")
+            
+        if pageHolder then
+            local dungeonPage = pageHolder:FindFirstChild("Events|Dungeon")
+            if dungeonPage and isReallyVisible(dungeonPage) then
+                local runFrame = dungeonPage:FindFirstChild("Run")
+                if runFrame and isReallyVisible(runFrame) then
+                    local treatFrame = runFrame:FindFirstChild("Treat")
+                    if treatFrame then
+                        local takeTreatBtn = treatFrame:FindFirstChild("TakeTreat")
+                        if takeTreatBtn and isReallyVisible(takeTreatBtn) then
+                            clickChoiceButton(takeTreatBtn)
+                            return true
+                        end
+                    end
+                end
+            end
+        end
+    end)
+
+    -- 3. Búsqueda general por nombre o texto ("Take the Treat")
+    for _, elem in ipairs(playerGui:GetDescendants()) do
+        if isReallyVisible(elem) and (elem:IsA("TextButton") or elem:IsA("TextLabel")) then
+            local textClean = cleanText(elem.Text)
+            if elem.Name == "TakeTreat" or textClean == "take the treat" or string.find(textClean, "take the treat", 1, true) then
+                local btn = elem:IsA("TextButton") and elem or elem:FindFirstAncestorOfClass("TextButton")
+                if btn and isReallyVisible(btn) then
+                    clickChoiceButton(btn)
+                    return true
+                end
+            end
+        end
+    end
+
+    -- 4. Reintentar / Reclamar si termina la run
+    for _, elem in ipairs(playerGui:GetDescendants()) do
+        if isReallyVisible(elem) and (elem:IsA("TextButton") or elem:IsA("TextLabel")) then
+            local textClean = cleanText(elem.Text)
+            if textClean == "start run" or textClean == "start" or textClean == "retry" or textClean == "claim rewards" or textClean == "claim" or textClean == "enter" then
+                local btn = elem:IsA("TextButton") and elem or elem:FindFirstAncestorOfClass("TextButton")
+                if btn and isReallyVisible(btn) then
+                    clickChoiceButton(btn)
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+function startDungeonLoop()
+    task.spawn(function()
+        notify("D666Scripts", "Jester's Dungeon Auto-Farm Enabled", 3)
+        while getgenv().AutoDungeonTreat do
+            if not isProcessingDungeon then
+                isProcessingDungeon = true
+                local delayVal = Options.DungeonDelay and Options.DungeonDelay.Value or 0.3
+                local clicked = processDungeonTreat()
+                
+                if clicked then
+                    task.wait(delayVal)
+                else
+                    task.wait(0.5)
+                end
+                isProcessingDungeon = false
+            end
+            task.wait(0.1)
+        end
+        notify("D666Scripts", "Jester's Dungeon Auto-Farm Disabled", 3)
+    end)
+end
+
+-- === INIT UI THEMES & SAVES ===
 ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
 ThemeManager:SetFolder("D666Scripts")
